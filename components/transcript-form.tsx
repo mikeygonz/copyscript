@@ -34,8 +34,10 @@ export const TranscriptForm = () => {
                 typeof item.offset === "number" && !isNaN(item.offset)
                   ? item.offset
                   : 0;
-              // Offset is always in milliseconds from the library, convert to seconds
-              const seconds = offsetValue / 1000;
+              
+              // Detect if offset is in milliseconds or seconds
+              const likelyMilliseconds = offsetValue > 1000;
+              const seconds = likelyMilliseconds ? offsetValue / 1000 : offsetValue;
               const timestamp = formatTimestamp(seconds);
               return `[${timestamp}] ${item.text}`;
             })
@@ -334,8 +336,12 @@ export const TranscriptForm = () => {
                           typeof item.offset === "number" && !isNaN(item.offset)
                             ? item.offset
                             : 0;
-                        // Offset is always in milliseconds from the library, convert to seconds
-                        const seconds = offsetValue / 1000;
+                        
+                        // Detect if offset is in milliseconds or seconds
+                        // If offset is > 1000, it's likely milliseconds, otherwise seconds
+                        const likelyMilliseconds = offsetValue > 1000;
+                        const seconds = likelyMilliseconds ? offsetValue / 1000 : offsetValue;
+                        
                         const timestamp = formatTimestamp(seconds);
                         return (
                           <div key={index} className="flex gap-3">

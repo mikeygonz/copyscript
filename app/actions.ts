@@ -123,12 +123,68 @@ async function getYoutubeTranscript(videoId: string): Promise<TranscriptItem[]> 
     console.log("[v0] Successfully fetched", transcriptItems.length, "transcript items")
     console.log("[v0] First item sample:", JSON.stringify(transcriptItems[0], null, 2))
     console.log("[v0] Sample offsets:", transcriptItems.slice(0, 5).map((item: any) => item.offset))
+    console.log("[v0] Sample items with missing offsets:", transcriptItems.slice(0, 10).map((item: any, idx: number) => ({
+      index: idx,
+      hasOffset: 'offset' in item,
+      hasStart: 'start' in item,
+      offset: item.offset,
+      start: item.start,
+      text: item.text?.substring(0, 30)
+    })))
+    
+    // Check for items with zero or missing offsets in the middle/end
+    const itemsWithZeroOffset = transcriptItems
+      .map((item: any, idx: number) => ({ 
+        index: idx, 
+        offset: item.offset, 
+        start: item.start,
+        hasOffset: 'offset' in item,
+        hasStart: 'start' in item
+      }))
+      .filter((item: any) => {
+        const offset = item.offset ?? item.start ?? 0
+        return offset === 0 || offset === null || offset === undefined
+      })
+    
+    if (itemsWithZeroOffset.length > 0) {
+      console.log("[v0] Found", itemsWithZeroOffset.length, "items with zero/missing offsets")
+      console.log("[v0] First few zero-offset items:", itemsWithZeroOffset.slice(0, 5))
+    }
 
     // Decode HTML entities and return items with timestamps
-    // offset is in milliseconds according to the library interface
-    return transcriptItems.map((item: any) => {
-      // Ensure we have a valid offset value
-      const offset = typeof item.offset === 'number' && !isNaN(item.offset) ? item.offset : 0
+    // The library might use 'offset' or 'start' - check both
+    // Also track cumulative time for items missing timestamps
+    // Determine unit format from first item
+    const firstItem = transcriptItems[0] as any
+    const sampleOffset = firstItem?.offset ?? firstItem?.start ?? 0
+    const likelyMilliseconds = sampleOffset > 1000
+    
+    let cumulativeTime = 0
+    
+    return transcriptItems.map((item: any, index: number) => {
+      // Try offset first, then start, then calculate from previous item
+      let offset: number = 0
+      
+      if (typeof item.offset === 'number' && !isNaN(item.offset) && item.offset >= 0) {
+        offset = item.offset
+      } else if (typeof item.start === 'number' && !isNaN(item.start) && item.start >= 0) {
+        offset = item.start
+      } else if (index > 0) {
+        // If this item has no offset, estimate from cumulative time
+        // Convert cumulative time back to original unit format
+        offset = likelyMilliseconds ? cumulativeTime * 1000 : cumulativeTime
+      }
+      
+      // Update cumulative time for next iteration
+      const duration = typeof item.duration === 'number' && !isNaN(item.duration) && item.duration > 0 
+        ? item.duration 
+        : 0
+      
+      // Convert to seconds for cumulative calculation
+      const offsetSeconds = likelyMilliseconds ? offset / 1000 : offset
+      const durationSeconds = likelyMilliseconds ? duration / 1000 : duration
+      
+      cumulativeTime = offsetSeconds + durationSeconds
       
       return {
         text: item.text
@@ -139,7 +195,7 @@ async function getYoutubeTranscript(videoId: string): Promise<TranscriptItem[]> 
           .replace(/&amp;lt;/g, "<")
           .trim(),
         offset: offset,
-        duration: item.duration ?? 0,
+        duration: duration,
       }
     })
   } catch (error) {
