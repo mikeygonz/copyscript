@@ -27,6 +27,11 @@ export const TranscriptForm = () => {
 
   const handleCopy = async () => {
     if (state?.transcript) {
+      // Detect unit format once based on first item (consistent with backend)
+      const firstItem = state.transcript[0];
+      const sampleOffset = firstItem?.offset ?? 0;
+      const likelyMilliseconds = sampleOffset > 1000;
+      
       const textToCopy = showTimestamps
         ? state.transcript
             .map((item) => {
@@ -34,10 +39,11 @@ export const TranscriptForm = () => {
                 typeof item.offset === "number" && !isNaN(item.offset)
                   ? item.offset
                   : 0;
-              
-              // Detect if offset is in milliseconds or seconds
-              const likelyMilliseconds = offsetValue > 1000;
-              const seconds = likelyMilliseconds ? offsetValue / 1000 : offsetValue;
+
+              // Use consistent detection based on first item
+              const seconds = likelyMilliseconds
+                ? offsetValue / 1000
+                : offsetValue;
               const timestamp = formatTimestamp(seconds);
               return `[${timestamp}] ${item.text}`;
             })
@@ -331,29 +337,36 @@ export const TranscriptForm = () => {
                 ) : state?.transcript ? (
                   showTimestamps ? (
                     <div className="space-y-2 max-h-96 overflow-y-auto">
-                      {state.transcript.map((item, index) => {
-                        const offsetValue =
-                          typeof item.offset === "number" && !isNaN(item.offset)
-                            ? item.offset
-                            : 0;
+                      {(() => {
+                        // Detect unit format once based on first item (consistent with backend)
+                        const firstItem = state.transcript[0];
+                        const sampleOffset = firstItem?.offset ?? 0;
+                        const likelyMilliseconds = sampleOffset > 1000;
                         
-                        // Detect if offset is in milliseconds or seconds
-                        // If offset is > 1000, it's likely milliseconds, otherwise seconds
-                        const likelyMilliseconds = offsetValue > 1000;
-                        const seconds = likelyMilliseconds ? offsetValue / 1000 : offsetValue;
-                        
-                        const timestamp = formatTimestamp(seconds);
-                        return (
-                          <div key={index} className="flex gap-3">
-                            <span className="text-muted-foreground text-xs font-mono shrink-0 tabular-nums">
-                              {timestamp}
-                            </span>
-                            <span className="text-sm font-mono leading-relaxed flex-1">
-                              {item.text}
-                            </span>
-                          </div>
-                        );
-                      })}
+                        return state.transcript.map((item, index) => {
+                          const offsetValue =
+                            typeof item.offset === "number" && !isNaN(item.offset)
+                              ? item.offset
+                              : 0;
+
+                          // Use consistent detection based on first item
+                          const seconds = likelyMilliseconds
+                            ? offsetValue / 1000
+                            : offsetValue;
+
+                          const timestamp = formatTimestamp(seconds);
+                          return (
+                            <div key={index} className="flex gap-3">
+                              <span className="text-muted-foreground text-xs font-mono shrink-0 tabular-nums">
+                                {timestamp}
+                              </span>
+                              <span className="text-sm font-mono leading-relaxed flex-1">
+                                {item.text}
+                              </span>
+                            </div>
+                          );
+                        });
+                      })()}
                     </div>
                   ) : (
                     <div className="max-h-96 overflow-y-auto">

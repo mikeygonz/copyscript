@@ -159,32 +159,55 @@ async function getYoutubeTranscript(videoId: string): Promise<TranscriptItem[]> 
     const sampleOffset = firstItem?.offset ?? firstItem?.start ?? 0
     const likelyMilliseconds = sampleOffset > 1000
     
-    let cumulativeTime = 0
+    let lastEndTime = 0 // Track last item's end time in seconds
     
     return transcriptItems.map((item: any, index: number) => {
-      // Try offset first, then start, then calculate from previous item
+      // Try offset first, then start, then calculate from previous item's end time
       let offset: number = 0
+      let offsetInSeconds: number = 0
+      let hasExplicitOffset = false
       
-      if (typeof item.offset === 'number' && !isNaN(item.offset) && item.offset >= 0) {
-        offset = item.offset
-      } else if (typeof item.start === 'number' && !isNaN(item.start) && item.start >= 0) {
-        offset = item.start
-      } else if (index > 0) {
-        // If this item has no offset, estimate from cumulative time
-        // Convert cumulative time back to original unit format
-        offset = likelyMilliseconds ? cumulativeTime * 1000 : cumulativeTime
+      if (typeof item.offset === 'number' && !isNaN(item.offset)) {
+        // Use explicit offset if it exists (even if 0, but only if at start)
+        if (index === 0 || item.offset > 0) {
+          offset = item.offset
+          offsetInSeconds = likelyMilliseconds ? offset / 1000 : offset
+          hasExplicitOffset = true
+        }
+      } else if (typeof item.start === 'number' && !isNaN(item.start)) {
+        // Use explicit start if it exists
+        if (index === 0 || item.start > 0) {
+          offset = item.start
+          offsetInSeconds = likelyMilliseconds ? offset / 1000 : offset
+          hasExplicitOffset = true
+        }
       }
       
-      // Update cumulative time for next iteration
+      // If no explicit offset and we're past the first item, use last end time
+      if (!hasExplicitOffset && index > 0 && lastEndTime > 0) {
+        offsetInSeconds = lastEndTime
+        offset = likelyMilliseconds ? lastEndTime * 1000 : lastEndTime
+      } else if (!hasExplicitOffset && index === 0) {
+        // First item with no offset - use 0
+        offset = 0
+        offsetInSeconds = 0
+      }
+      
+      // Get duration and convert to seconds
       const duration = typeof item.duration === 'number' && !isNaN(item.duration) && item.duration > 0 
         ? item.duration 
         : 0
+      const durationInSeconds = likelyMilliseconds ? duration / 1000 : duration
       
-      // Convert to seconds for cumulative calculation
-      const offsetSeconds = likelyMilliseconds ? offset / 1000 : offset
-      const durationSeconds = likelyMilliseconds ? duration / 1000 : duration
+      // Calculate end time for next iteration
+      const currentEndTime = offsetInSeconds + durationInSeconds
+      // Use the maximum to handle cases where offsets might go backwards
+      lastEndTime = Math.max(lastEndTime, currentEndTime)
       
-      cumulativeTime = offsetSeconds + durationSeconds
+      // Log when we're using calculated offsets
+      if (index > 0 && !hasExplicitOffset && lastEndTime > 0) {
+        console.log(`[v0] Item ${index} missing offset, using calculated: ${offsetInSeconds.toFixed(2)}s (${Math.round(offset)}ms)`)
+      }
       
       return {
         text: item.text
