@@ -1,79 +1,151 @@
 "use server"
 
-import { parseStringPromise } from "xml2js"
+import { YoutubeTranscript } from "@danielxceron/youtube-transcript"
+
+type TranscriptItem = {
+  text: string
+  offset: number
+  duration: number
+}
+
+type VideoMetadata = {
+  title: string
+  thumbnail: string
+  duration: string
+  channelName?: string
+}
 
 type TranscriptState = {
-  transcript?: string
+  transcript?: TranscriptItem[]
+  metadata?: VideoMetadata
   error?: string
 } | null
 
-async function getYoutubeTranscript(videoId: string): Promise<string> {
-  console.log("[v0] Starting InnerTube API fetch for video:", videoId)
-
-  // Step 1: Fetch video page to get INNERTUBE_API_KEY
-  console.log("[v0] Step 1: Fetching video page HTML")
-  const videoPageResponse = await fetch(`https://www.youtube.com/watch?v=${videoId}`)
-  const videoPageHtml = await videoPageResponse.text()
-  console.log("[v0] Video page fetched, HTML length:", videoPageHtml.length)
-
-  const apiKeyMatch = videoPageHtml.match(/"INNERTUBE_API_KEY":"([^"]+)"/)
-  if (!apiKeyMatch) {
-    console.log("[v0] ERROR: Could not extract INNERTUBE_API_KEY from HTML")
-    throw new Error("Could not extract API key")
+function formatTimestamp(seconds: number): string {
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const secs = Math.floor(seconds % 60)
+  
+  if (hours > 0) {
+    return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
-  const apiKey = apiKeyMatch[1]
-  console.log("[v0] Successfully extracted API key:", apiKey.substring(0, 10) + "...")
+  return `${minutes}:${secs.toString().padStart(2, '0')}`
+}
 
-  // Step 2: Call InnerTube player API with Android client context
-  console.log("[v0] Step 2: Calling InnerTube player API")
-  const playerResponse = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${apiKey}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      context: {
-        client: {
-          clientName: "ANDROID",
-          clientVersion: "19.09.37",
-          androidSdkVersion: 30,
-        },
-      },
-      videoId: videoId,
-    }),
-  })
-
-  const playerData = await playerResponse.json()
-  console.log("[v0] Player API response received")
-  console.log("[v0] Has captions object:", !!playerData?.captions)
-
-  // Step 3: Extract caption track URL
-  const captionTracks = playerData?.captions?.playerCaptionsTracklistRenderer?.captionTracks
-  console.log("[v0] Caption tracks found:", captionTracks?.length || 0)
-
-  if (!captionTracks || captionTracks.length === 0) {
-    console.log("[v0] ERROR: No caption tracks available")
-    console.log("[v0] Player data structure:", JSON.stringify(playerData, null, 2).substring(0, 500))
-    throw new Error("No captions available for this video")
+function formatDuration(seconds: number): string {
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const secs = Math.floor(seconds % 60)
+  
+  if (hours > 0) {
+    return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
+  return `${minutes}:${secs.toString().padStart(2, '0')}`
+}
 
-  // Get English captions or first available
-  const captionTrack = captionTracks.find((track: any) => track.languageCode === "en") || captionTracks[0]
-  console.log("[v0] Selected caption track language:", captionTrack.languageCode)
-  const captionUrl = captionTrack.baseUrl
+async function getYoutubeVideoMetadata(videoId: string, transcriptItems?: TranscriptItem[]): Promise<VideoMetadata | null> {
+  try {
+    const response = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`)
+    if (!response.ok) {
+      return null
+    }
+    const data = await response.json()
+    
+    // Calculate duration from transcript if available
+    // Find the maximum end time (offset + duration) across all items
+    let duration = ''
+    if (transcriptItems && transcriptItems.length > 0) {
+      let maxEndTime = 0
+      console.log("[v0] Calculating duration from", transcriptItems.length, "items")
+      
+      // Check a sample to determine if values are in seconds or milliseconds
+      const sampleOffset = transcriptItems[0]?.offset || 0
+      const sampleDuration = transcriptItems[0]?.duration || 0
+      const likelyMilliseconds = sampleOffset > 1000 || sampleDuration > 1000
+      
+      console.log("[v0] Sample offset:", sampleOffset, "Sample duration:", sampleDuration)
+      console.log("[v0] Likely milliseconds:", likelyMilliseconds)
+      
+      for (const item of transcriptItems) {
+        const offsetValue = typeof item.offset === 'number' && !isNaN(item.offset) ? item.offset : 0
+        const durationValue = typeof item.duration === 'number' && !isNaN(item.duration) ? item.duration : 0
+        
+        // Convert to seconds based on detected format
+        const offsetSeconds = likelyMilliseconds ? offsetValue / 1000 : offsetValue
+        const durationSeconds = likelyMilliseconds ? durationValue / 1000 : durationValue
+        
+        const endTime = offsetSeconds + durationSeconds
+        
+        if (endTime > maxEndTime) {
+          maxEndTime = endTime
+        }
+      }
+      
+      // Also check the last item specifically
+      const lastItem = transcriptItems[transcriptItems.length - 1]
+      const lastOffset = typeof lastItem.offset === 'number' && !isNaN(lastItem.offset) ? lastItem.offset : 0
+      const lastDuration = typeof lastItem.duration === 'number' && !isNaN(lastItem.duration) ? lastItem.duration : 0
+      const lastOffsetSeconds = likelyMilliseconds ? lastOffset / 1000 : lastOffset
+      const lastDurationSeconds = likelyMilliseconds ? lastDuration / 1000 : lastDuration
+      const lastEndTime = lastOffsetSeconds + lastDurationSeconds
+      
+      console.log("[v0] Max end time calculated:", maxEndTime, "seconds")
+      console.log("[v0] Last item offset:", lastOffset, "->", lastOffsetSeconds, "seconds")
+      console.log("[v0] Last item duration:", lastDuration, "->", lastDurationSeconds, "seconds")
+      console.log("[v0] Last item end time:", lastEndTime, "seconds")
+      
+      // Use the maximum of our calculated max and the last item's end time
+      const finalDuration = Math.max(maxEndTime, lastEndTime)
+      
+      if (finalDuration > 0) {
+        duration = formatDuration(finalDuration)
+        console.log("[v0] Formatted duration:", duration)
+      }
+    }
+    
+    return {
+      title: data.title || '',
+      thumbnail: data.thumbnail_url || `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
+      duration,
+      channelName: data.author_name || undefined,
+    }
+  } catch (error) {
+    console.log("[v0] ERROR fetching video metadata:", error)
+    return null
+  }
+}
 
-  // Step 4: Fetch and parse XML captions
-  console.log("[v0] Step 4: Fetching caption XML from:", captionUrl.substring(0, 50) + "...")
-  const captionResponse = await fetch(captionUrl)
-  const captionXml = await captionResponse.text()
-  console.log("[v0] Caption XML fetched, length:", captionXml.length)
+async function getYoutubeTranscript(videoId: string): Promise<TranscriptItem[]> {
+  console.log("[v0] Fetching transcript for video:", videoId)
 
-  // Parse XML to extract text
-  const parsedXml = await parseStringPromise(captionXml)
-  const textSegments = parsedXml.transcript.text.map((item: any) => item._)
-  console.log("[v0] Successfully parsed", textSegments.length, "text segments")
+  try {
+    const transcriptItems = await YoutubeTranscript.fetchTranscript(videoId)
+    console.log("[v0] Successfully fetched", transcriptItems.length, "transcript items")
+    console.log("[v0] First item sample:", JSON.stringify(transcriptItems[0], null, 2))
+    console.log("[v0] Sample offsets:", transcriptItems.slice(0, 5).map((item: any) => item.offset))
 
-  return textSegments.join(" ").replace(/\s+/g, " ").trim()
+    // Decode HTML entities and return items with timestamps
+    // offset is in milliseconds according to the library interface
+    return transcriptItems.map((item: any) => {
+      // Ensure we have a valid offset value
+      const offset = typeof item.offset === 'number' && !isNaN(item.offset) ? item.offset : 0
+      
+      return {
+        text: item.text
+      .replace(/&amp;#39;/g, "'")
+      .replace(/&amp;quot;/g, '"')
+      .replace(/&amp;amp;/g, "&")
+          .replace(/&amp;gt;/g, ">")
+          .replace(/&amp;lt;/g, "<")
+          .trim(),
+        offset: offset,
+        duration: item.duration ?? 0,
+      }
+    })
+  } catch (error) {
+    console.log("[v0] ERROR fetching transcript:", error)
+    throw error
+  }
 }
 
 export async function getTranscript(_prevState: TranscriptState, formData: FormData): Promise<TranscriptState> {
@@ -104,8 +176,9 @@ export async function getTranscript(_prevState: TranscriptState, formData: FormD
 
   try {
     const transcript = await getYoutubeTranscript(videoId)
+    const metadata = await getYoutubeVideoMetadata(videoId, transcript)
     console.log("[v0] SUCCESS: Transcript fetched, length:", transcript.length)
-    return { transcript }
+    return { transcript, metadata: metadata || undefined }
   } catch (error) {
     console.log("[v0] ERROR in getTranscript:", error)
     const errorMessage = error instanceof Error ? error.message : "Unknown error"
