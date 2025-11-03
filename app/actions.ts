@@ -121,10 +121,26 @@ async function getYoutubeTranscript(videoId: string): Promise<TranscriptItem[]> 
   console.log("[v0] Fetching transcript for video:", videoId)
 
   try {
-    // Use desktop user agent to avoid mobile restrictions
-    const transcriptItems = await YoutubeTranscript.fetchTranscript(videoId, {
-      lang: 'en'
-    })
+    // Try to fetch transcript with retry logic for better reliability
+    let transcriptItems;
+    let lastError;
+    
+    // Attempt with English first, then try without language specification
+    try {
+      transcriptItems = await YoutubeTranscript.fetchTranscript(videoId, {
+        lang: 'en'
+      })
+    } catch (error) {
+      console.log("[v0] Failed with lang=en, trying without language:", error)
+      lastError = error;
+      // Retry without language specification
+      try {
+        transcriptItems = await YoutubeTranscript.fetchTranscript(videoId)
+      } catch (retryError) {
+        console.log("[v0] Failed without language spec:", retryError)
+        throw retryError instanceof Error ? retryError : lastError;
+      }
+    }
     console.log("[v0] Successfully fetched", transcriptItems.length, "transcript items")
     console.log("[v0] First item sample:", JSON.stringify(transcriptItems[0], null, 2))
     console.log("[v0] Sample offsets:", transcriptItems.slice(0, 5).map((item: any) => item.offset))
@@ -235,8 +251,11 @@ async function getYoutubeTranscript(videoId: string): Promise<TranscriptItem[]> 
 export async function getTranscript(_prevState: TranscriptState, formData: FormData): Promise<TranscriptState> {
   const url = formData.get("url") as string
   console.log("[v0] getTranscript called with URL:", url)
+  console.log("[v0] FormData entries:", Array.from(formData.entries()))
+  console.log("[v0] User agent:", typeof window !== 'undefined' ? navigator.userAgent : 'server-side')
 
-  if (!url) {
+  if (!url || url.trim() === "") {
+    console.log("[v0] No URL provided in form data")
     return { error: "Please provide a YouTube URL" }
   }
 
@@ -276,8 +295,21 @@ export async function getTranscript(_prevState: TranscriptState, formData: FormD
       userFriendlyError = "Unable to retrieve transcript. The video may not have captions available."
     }
     
+    // Provide more specific error messages
+    let finalError = userFriendlyError
+    if (errorMessage.toLowerCase().includes("could not retrieve a transcript") || 
+        errorMessage.toLowerCase().includes("transcript not available")) {
+      finalError = "This video's transcript is not available. Some videos have transcripts disabled by the creator."
+    } else if (errorMessage.toLowerCase().includes("video unavailable") ||
+               errorMessage.toLowerCase().includes("video not found")) {
+      finalError = "This video is not available or has been removed."
+    } else if (errorMessage.toLowerCase().includes("private") ||
+               errorMessage.toLowerCase().includes("restricted")) {
+      finalError = "This video is private or restricted. Transcripts are only available for public videos."
+    }
+    
     return {
-      error: `Unable to fetch transcript: ${userFriendlyError}`,
+      error: `Unable to fetch transcript: ${finalError}`,
     }
   }
 }
