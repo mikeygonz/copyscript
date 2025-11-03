@@ -603,7 +603,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
     >
       {/* Logo - Fixed top left in home view */}
       {!showHeader && (
-        <div className="fixed top-0 left-0 right-0 h-[60px] sm:h-[65px] z-50 flex items-center px-3 sm:px-4 pointer-events-none">
+        <div className="fixed top-0 left-0 right-0 h-[60px] sm:h-[65px] z-50 flex items-center px-3 sm:px-4 pointer-events-none bg-background/80 backdrop-blur-sm sm:bg-transparent sm:backdrop-blur-none">
           <svg
             className="h-7 select-none cursor-pointer hover:opacity-80 transition-opacity pointer-events-auto"
             viewBox="0 0 120 24"
@@ -649,11 +649,11 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
       {showHeader && (
         <div
           className={cn(
-            "fixed top-0 left-0 right-0 h-[60px] sm:h-[65px] bg-background z-50 flex items-center px-3 sm:px-4",
+            "fixed top-0 left-0 right-0 h-auto sm:h-[65px] min-h-[60px] bg-background z-50 flex items-center px-3 sm:px-4 py-2 sm:py-0",
             showBorder && "border-b border-border"
           )}
         >
-          <div className="w-full flex items-center justify-between gap-2 sm:gap-4">
+          <div className="w-full flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-4 py-2 sm:py-0">
             {/* Logo - Left */}
             <svg
               className="h-6 sm:h-7 select-none cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0"
@@ -692,7 +692,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
             </svg>
 
             {/* Search Form - Centered */}
-            <div className="flex-1 flex justify-center min-w-0">
+            <div className="flex-1 flex justify-center min-w-0 w-full sm:w-auto">
               <form
                 action={formAction}
                 onSubmit={(e) => {
@@ -739,7 +739,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                 }}
                 className="w-full max-w-[800px]"
               >
-                <div className="flex gap-1.5 sm:gap-2 items-center">
+                <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-2 items-stretch sm:items-center">
                   <Input
                     type="url"
                     name="url"
@@ -765,7 +765,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                   <Button
                     type="submit"
                     disabled={isPending}
-                    className="font-normal text-xs sm:text-sm whitespace-nowrap flex-shrink-0"
+                    className="font-normal text-xs sm:text-sm whitespace-nowrap flex-shrink-0 w-full sm:w-auto"
                     aria-label={
                       isPending ? "Fetching transcript" : "Get transcript"
                     }
@@ -777,13 +777,13 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
             </div>
 
             {/* Controls - Right (empty for now) */}
-            <div className="w-[120px]" />
+            <div className="hidden sm:block w-[120px]" />
           </div>
         </div>
       )}
 
       {/* Spacer for fixed header */}
-      {showHeader && <div className="h-[60px] sm:h-[65px]" />}
+      {showHeader && <div className="h-[80px] sm:h-[65px]" />}
 
       {/* Main search form - hidden when transcript is showing */}
       {!showHeader && (
@@ -834,7 +834,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
           }}
         >
           <div className="space-y-1 max-w-2xl mx-auto">
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <div className="flex-1 min-w-0">
                 <Input
                   ref={mainInputRef}
@@ -880,7 +880,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
               <Button
                 type="submit"
                 disabled={isPending}
-                className="font-normal text-sm whitespace-nowrap flex-shrink-0"
+                className="font-normal text-sm whitespace-nowrap flex-shrink-0 w-full sm:w-auto"
                 aria-label={
                   isPending ? "Fetching transcript" : "Get transcript"
                 }
@@ -1159,7 +1159,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                   <h3 className="text-xs font-medium text-muted-foreground/50 uppercase tracking-wider px-2">
                     Transcript
                   </h3>
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
                     <div className="flex items-center border border-border rounded-md p-0.5 bg-input shadow-sm flex-1 min-w-0">
                       <button
                         onClick={() => setShowTimestamps(true)}
@@ -1193,7 +1193,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                       size="sm"
                       onClick={handleCopy}
                       disabled={isPending || !displayState?.transcript}
-                      className="gap-2 text-xs whitespace-nowrap flex-shrink-0 min-h-[44px] sm:min-h-auto"
+                      className="gap-2 text-xs whitespace-nowrap flex-shrink-0 w-full sm:w-auto min-h-[44px] sm:min-h-auto"
                       aria-label={
                         copied ? "Transcript copied" : "Copy transcript"
                       }
