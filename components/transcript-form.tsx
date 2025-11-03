@@ -752,7 +752,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                     aria-invalid={!!(validationError || state?.error)}
                     aria-label="YouTube video URL"
                     aria-describedby={
-                      validationError || state?.error ? errorId : undefined
+                      validationError || state?.error ? `${errorId}-header` : undefined
                     }
                     autoComplete="url"
                     onChange={(e) => {
