@@ -1,6 +1,11 @@
 "use client";
 
-import React, { useState, useActionState, useEffect, startTransition } from "react";
+import React, {
+  useState,
+  useActionState,
+  useEffect,
+  startTransition,
+} from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -56,7 +61,11 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
   const [copiedTranscript, setCopiedTranscript] = useState<string | null>(null);
   const [isInputFocused, setIsInputFocused] = useState(false);
+  const [focusedRecentIndex, setFocusedRecentIndex] = useState<number | null>(
+    null
+  );
   const mainInputRef = React.useRef<HTMLInputElement>(null);
+  const recentSearchRefs = React.useRef<(HTMLButtonElement | null)[]>([]);
   const errorId = "url-error";
   const hasError = !!(validationError || state?.error);
   const errorMessage = validationError || state?.error;
@@ -84,16 +93,16 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
   const handleHomeClick = (e: React.MouseEvent<HTMLDivElement>) => {
     // Only handle clicks on non-interactive elements
     const target = e.target as HTMLElement;
-    const isInteractive = 
-      target.tagName === 'BUTTON' ||
-      target.tagName === 'A' ||
-      target.tagName === 'INPUT' ||
-      target.tagName === 'SVG' ||
-      target.closest('button') ||
-      target.closest('a') ||
-      target.closest('form') ||
-      target.closest('svg');
-    
+    const isInteractive =
+      target.tagName === "BUTTON" ||
+      target.tagName === "A" ||
+      target.tagName === "INPUT" ||
+      target.tagName === "SVG" ||
+      target.closest("button") ||
+      target.closest("a") ||
+      target.closest("form") ||
+      target.closest("svg");
+
     if (!isInteractive && mainInputRef.current && !showHeader) {
       // Toggle focus: if focused, blur; if not focused, focus
       if (isInputFocused) {
@@ -103,7 +112,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
       }
     } else if (isInteractive && mainInputRef.current && !showHeader) {
       // If clicking on interactive element, blur input
-      if (isInputFocused && target.tagName !== 'INPUT') {
+      if (isInputFocused && target.tagName !== "INPUT") {
         mainInputRef.current.blur();
       }
     }
@@ -187,6 +196,36 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
     }
   }, [showHeader]);
 
+  // Handle Enter key to focus input
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only focus input on Enter if not already in an input/textarea or form
+      if (e.key === "Enter" && !showHeader) {
+        const target = e.target as HTMLElement;
+        const isInInput =
+          target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.closest("form")?.querySelector("input:focus") ||
+          target.closest("form")?.querySelector("textarea:focus");
+
+        if (
+          !isInInput &&
+          mainInputRef.current &&
+          document.activeElement !== mainInputRef.current
+        ) {
+          e.preventDefault();
+          mainInputRef.current.focus();
+          mainInputRef.current.select();
+        }
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showHeader]);
+
   // Handle clicks outside input to blur it
   useEffect(() => {
     if (!showHeader && mainInputRef.current) {
@@ -198,23 +237,23 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
           isInputFocused
         ) {
           // Don't blur if clicking on interactive elements that might want focus
-          const isInteractive = 
-            target.tagName === 'BUTTON' ||
-            target.tagName === 'A' ||
-            target.tagName === 'INPUT' ||
-            target.closest('button') ||
-            target.closest('a') ||
-            target.closest('form');
-          
+          const isInteractive =
+            target.tagName === "BUTTON" ||
+            target.tagName === "A" ||
+            target.tagName === "INPUT" ||
+            target.closest("button") ||
+            target.closest("a") ||
+            target.closest("form");
+
           if (!isInteractive) {
             mainInputRef.current.blur();
           }
         }
       };
 
-      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener("mousedown", handleClickOutside);
       return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
+        document.removeEventListener("mousedown", handleClickOutside);
       };
     }
   }, [showHeader, isInputFocused]);
@@ -300,7 +339,10 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
     }
   }, [state?.metadata, state?.transcript, lastSubmittedUrl]);
 
-  const handleRecentSearchClick = (url: string, e?: React.MouseEvent) => {
+  const handleRecentSearchClick = (
+    url: string,
+    e?: React.MouseEvent | React.KeyboardEvent
+  ) => {
     // Prevent click if clicking on delete button or dropdown menu
     if (e && (e.target as HTMLElement).closest("[data-delete-button]")) {
       return;
@@ -308,7 +350,10 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
     if (e && (e.target as HTMLElement).closest("[role='menu']")) {
       return;
     }
-    if (e && (e.target as HTMLElement).closest("button[aria-haspopup='menu']")) {
+    if (
+      e &&
+      (e.target as HTMLElement).closest("button[aria-haspopup='menu']")
+    ) {
       return;
     }
 
@@ -389,14 +434,14 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
 
   const handleCopyTranscript = async (videoId: string) => {
     if (typeof window === "undefined") return;
-    
+
     const cached = localStorage.getItem(`transcriptCache_${videoId}`);
     if (!cached) return;
-    
+
     try {
       const cachedData = JSON.parse(cached);
       const transcript = cachedData.transcript;
-      
+
       if (transcript) {
         // Detect unit format
         const firstItem = transcript[0];
@@ -416,7 +461,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
             return `[${timestamp}] ${item.text}`;
           })
           .join("\n");
-          
+
         await navigator.clipboard.writeText(textToCopy);
         setCopiedTranscript(videoId);
         setTimeout(() => setCopiedTranscript(null), 2000);
@@ -426,7 +471,58 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
     }
   };
 
-  const handleDeleteClick = (videoId: string, e?: React.MouseEvent) => {
+  const handleRecentSearchKeyDown = (
+    e: React.KeyboardEvent<HTMLButtonElement>,
+    url: string,
+    index: number
+  ) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handleRecentSearchClick(url, e);
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      const nextIndex = index + 1;
+      if (
+        nextIndex < recentSearches.length &&
+        recentSearchRefs.current[nextIndex]
+      ) {
+        recentSearchRefs.current[nextIndex]?.focus();
+        setFocusedRecentIndex(nextIndex);
+      }
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      const prevIndex = index - 1;
+      if (prevIndex >= 0 && recentSearchRefs.current[prevIndex]) {
+        recentSearchRefs.current[prevIndex]?.focus();
+        setFocusedRecentIndex(prevIndex);
+      } else if (prevIndex < 0 && mainInputRef.current) {
+        mainInputRef.current.focus();
+        setFocusedRecentIndex(null);
+      }
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      if (recentSearchRefs.current[0]) {
+        recentSearchRefs.current[0]?.focus();
+        setFocusedRecentIndex(0);
+      }
+    } else if (e.key === "End") {
+      e.preventDefault();
+      const lastIndex = recentSearches.length - 1;
+      if (recentSearchRefs.current[lastIndex]) {
+        recentSearchRefs.current[lastIndex]?.focus();
+        setFocusedRecentIndex(lastIndex);
+      }
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      mainInputRef.current?.focus();
+      setFocusedRecentIndex(null);
+    }
+  };
+
+  const handleDeleteClick = (
+    videoId: string,
+    e?: React.MouseEvent | React.KeyboardEvent
+  ) => {
     if (e) {
       e.stopPropagation();
     }
@@ -484,7 +580,10 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
     }
     try {
       const urlObj = new URL(url);
-      if (!urlObj.hostname.includes("youtube.com") && !urlObj.hostname.includes("youtu.be")) {
+      if (
+        !urlObj.hostname.includes("youtube.com") &&
+        !urlObj.hostname.includes("youtu.be")
+      ) {
         return "Please enter a valid YouTube URL";
       }
       const videoId = extractVideoId(url);
@@ -498,7 +597,10 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
   };
 
   return (
-    <div className="space-y-6" onClick={!showHeader ? handleHomeClick : undefined}>
+    <div
+      className="space-y-6"
+      onClick={!showHeader ? handleHomeClick : undefined}
+    >
       {/* Logo - Fixed top left in home view */}
       {!showHeader && (
         <div className="fixed top-0 left-0 right-0 h-[65px] z-50 flex items-center px-4 pointer-events-none">
@@ -539,16 +641,18 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
           </svg>
         </div>
       )}
-      
+
       {/* Show title only when not in header mode */}
       {!showHeader && titleElement}
 
       {/* Persistent Header - Shows when transcript is loading or loaded */}
       {showHeader && (
-        <div className={cn(
-          "fixed top-0 left-0 right-0 h-[65px] bg-background z-50 flex items-center px-4",
-          showBorder && "border-b border-border"
-        )}>
+        <div
+          className={cn(
+            "fixed top-0 left-0 right-0 h-[65px] bg-background z-50 flex items-center px-4",
+            showBorder && "border-b border-border"
+          )}
+        >
           <div className="w-full flex items-center justify-between gap-4">
             {/* Logo - Left */}
             <svg
@@ -586,7 +690,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                 copyscript
               </text>
             </svg>
-            
+
             {/* Search Form - Centered */}
             <div className="flex-1 flex justify-center">
               <form
@@ -595,14 +699,14 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                   e.preventDefault();
                   const formData = new FormData(e.currentTarget);
                   const url = formData.get("url") as string;
-                  
+
                   // Validate URL
                   const error = validateUrl(url);
                   if (error) {
                     setValidationError(error);
                     return;
                   }
-                  
+
                   setValidationError(null);
                   const videoId = extractVideoId(url);
                   setCurrentUrl(url);
@@ -612,7 +716,9 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                   setCachedState(null);
                   if (videoId) {
                     setRecentSearches((prev) => {
-                      const filtered = prev.filter((s) => s.videoId !== videoId);
+                      const filtered = prev.filter(
+                        (s) => s.videoId !== videoId
+                      );
                       if (filtered.length !== prev.length) {
                         localStorage.setItem(
                           "recentSearches",
@@ -626,7 +732,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                     });
                   }
                   console.log("[v0] Form submitted with URL:", url);
-                  
+
                   startTransition(() => {
                     formAction(formData);
                   });
@@ -644,6 +750,11 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                       (validationError || state?.error) && "aria-invalid"
                     )}
                     aria-invalid={!!(validationError || state?.error)}
+                    aria-label="YouTube video URL"
+                    aria-describedby={
+                      validationError || state?.error ? errorId : undefined
+                    }
+                    autoComplete="url"
                     onChange={(e) => {
                       setCurrentUrl(e.target.value);
                       if (validationError) {
@@ -655,13 +766,16 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                     type="submit"
                     disabled={isPending}
                     className="font-normal text-sm"
+                    aria-label={
+                      isPending ? "Fetching transcript" : "Get transcript"
+                    }
                   >
                     {isPending ? "Fetching..." : "Get Transcript"}
                   </Button>
                 </div>
               </form>
             </div>
-            
+
             {/* Controls - Right (empty for now) */}
             <div className="w-[120px]" />
           </div>
@@ -676,96 +790,116 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
         <form
           action={formAction}
           onSubmit={(e) => {
-          e.preventDefault();
-          const formData = new FormData(e.currentTarget);
-          const url = formData.get("url") as string;
-          
-          // Validate URL
-          const error = validateUrl(url);
-          if (error) {
-            setValidationError(error);
-            return;
-          }
-          
-          setValidationError(null);
-          const videoId = extractVideoId(url);
-          setCurrentUrl(url);
-          setLastSubmittedUrl(url); // Track the URL we just submitted
-          setLoadingVideoId(videoId || null); // Track which video is loading
-          setSelectedVideoId(null); // Clear selected state when loading new video
-          setCachedState(null); // Clear cached state
-          // Clear any existing history entry for this video to prevent showing old metadata
-          if (videoId) {
-            setRecentSearches((prev) => {
-              const filtered = prev.filter((s) => s.videoId !== videoId);
-              if (filtered.length !== prev.length) {
-                localStorage.setItem(
-                  "recentSearches",
-                  JSON.stringify(filtered)
-                );
-                // Also clear cached transcript to prevent stale data
-                if (typeof window !== "undefined") {
-                  localStorage.removeItem(`transcriptCache_${videoId}`);
-                }
-              }
-              return filtered;
-            });
-          }
-          console.log("[v0] Form submitted with URL:", url);
-          
-          // Submit the form within a transition
-          startTransition(() => {
-            formAction(formData);
-          });
-        }}
-      >
-        <div className="space-y-1 max-w-2xl mx-auto">
-          <div className="flex gap-2">
-            <div className="flex-1">
-              <Input
-                ref={mainInputRef}
-                type="url"
-                name="url"
-                placeholder="https://youtube.com/watch?v=..."
-                disabled={isPending}
-                className={cn(
-                  hasError && "aria-invalid"
-                )}
-                aria-invalid={hasError}
-                aria-describedby={hasError ? errorId : undefined}
-                aria-errormessage={hasError ? errorId : undefined}
-                onFocus={() => setIsInputFocused(true)}
-                onBlur={() => setIsInputFocused(false)}
-                onChange={(e) => {
-                  setCurrentUrl(e.target.value);
-                  // Clear validation error when user starts typing
-                  if (validationError) {
-                    setValidationError(null);
+            e.preventDefault();
+            const formData = new FormData(e.currentTarget);
+            const url = formData.get("url") as string;
+
+            // Validate URL
+            const error = validateUrl(url);
+            if (error) {
+              setValidationError(error);
+              return;
+            }
+
+            setValidationError(null);
+            const videoId = extractVideoId(url);
+            setCurrentUrl(url);
+            setLastSubmittedUrl(url); // Track the URL we just submitted
+            setLoadingVideoId(videoId || null); // Track which video is loading
+            setSelectedVideoId(null); // Clear selected state when loading new video
+            setCachedState(null); // Clear cached state
+            // Clear any existing history entry for this video to prevent showing old metadata
+            if (videoId) {
+              setRecentSearches((prev) => {
+                const filtered = prev.filter((s) => s.videoId !== videoId);
+                if (filtered.length !== prev.length) {
+                  localStorage.setItem(
+                    "recentSearches",
+                    JSON.stringify(filtered)
+                  );
+                  // Also clear cached transcript to prevent stale data
+                  if (typeof window !== "undefined") {
+                    localStorage.removeItem(`transcriptCache_${videoId}`);
                   }
-                  // Note: Server errors (state.error) will persist until next submission
-                }}
-              />
+                }
+                return filtered;
+              });
+            }
+            console.log("[v0] Form submitted with URL:", url);
+
+            // Submit the form within a transition
+            startTransition(() => {
+              formAction(formData);
+            });
+          }}
+        >
+          <div className="space-y-1 max-w-2xl mx-auto">
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <Input
+                  ref={mainInputRef}
+                  type="url"
+                  name="url"
+                  placeholder="https://youtube.com/watch?v=..."
+                  disabled={isPending}
+                  className={cn(hasError && "aria-invalid")}
+                  aria-invalid={hasError}
+                  aria-describedby={hasError ? errorId : undefined}
+                  aria-errormessage={hasError ? errorId : undefined}
+                  aria-label="YouTube video URL"
+                  autoComplete="url"
+                  onFocus={() => {
+                    setIsInputFocused(true);
+                    setFocusedRecentIndex(null);
+                  }}
+                  onBlur={() => setIsInputFocused(false)}
+                  onKeyDown={(e) => {
+                    // Arrow down to move to first recent item
+                    if (
+                      e.key === "ArrowDown" &&
+                      recentSearches.length > 0 &&
+                      !showHeader
+                    ) {
+                      e.preventDefault();
+                      if (recentSearchRefs.current[0]) {
+                        recentSearchRefs.current[0]?.focus();
+                        setFocusedRecentIndex(0);
+                      }
+                    }
+                  }}
+                  onChange={(e) => {
+                    setCurrentUrl(e.target.value);
+                    // Clear validation error when user starts typing
+                    if (validationError) {
+                      setValidationError(null);
+                    }
+                    // Note: Server errors (state.error) will persist until next submission
+                  }}
+                />
+              </div>
+              <Button
+                type="submit"
+                disabled={isPending}
+                className="font-normal text-sm"
+                aria-label={
+                  isPending ? "Fetching transcript" : "Get transcript"
+                }
+              >
+                {isPending ? "Fetching..." : "Get Transcript"}
+              </Button>
             </div>
-            <Button
-              type="submit"
-              disabled={isPending}
-              className="font-normal text-sm"
-            >
-              {isPending ? "Fetching..." : "Get Transcript"}
-            </Button>
+            {hasError && (
+              <p
+                id={errorId}
+                role="alert"
+                aria-live="polite"
+                className="text-sm text-destructive px-1"
+              >
+                {errorMessage}
+              </p>
+            )}
           </div>
-          {hasError && (
-            <p
-              id={errorId}
-              role="alert"
-              aria-live="polite"
-              className="text-sm text-destructive px-1"
-            >
-              {errorMessage}
-            </p>
-          )}
-        </div>
-      </form>
+        </form>
       )}
 
       {recentSearches.length > 0 && !displayState?.transcript && !isPending && (
@@ -773,17 +907,31 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
           <h2 className="text-xs font-medium text-muted-foreground/50 uppercase tracking-wider px-2">
             Recents
           </h2>
-          <div className="space-y-1.5">
-            {recentSearches.map((search) => {
+          <div className="space-y-1.5" role="list" aria-label="Recent searches">
+            {recentSearches.map((search, index) => {
               const isSelected = selectedVideoId === search.videoId;
               return (
-                <div key={search.videoId} className="relative group">
+                <div
+                  key={search.videoId}
+                  className="relative group"
+                  role="listitem"
+                >
                   <button
+                    ref={(el) => {
+                      recentSearchRefs.current[index] = el;
+                    }}
                     onClick={(e) => handleRecentSearchClick(search.url, e)}
-                    className={`w-full text-left p-1.5 rounded-md transition-colors border ${
+                    onKeyDown={(e) =>
+                      handleRecentSearchKeyDown(e, search.url, index)
+                    }
+                    aria-label={`Load transcript for ${search.title}${
+                      search.channelName ? ` by ${search.channelName}` : ""
+                    }`}
+                    aria-pressed={isSelected}
+                    className={`w-full text-left p-1.5 rounded-md transition-colors border focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
                       isSelected
                         ? "bg-accent text-foreground border-border"
-                        : "border-transparent text-foreground/90 hover:bg-accent/30 hover:text-foreground"
+                        : "border-transparent text-foreground/90 hover:bg-accent/30 hover:text-foreground focus:bg-accent/30"
                     }`}
                   >
                     <div className="flex gap-3 items-start">
@@ -825,9 +973,13 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                     <DropdownMenuTrigger asChild>
                       <button
                         onClick={(e) => e.stopPropagation()}
-                        className="absolute top-2 right-2 p-1 rounded hover:bg-accent/50 transition-colors shrink-0"
+                        aria-label={`More options for ${search.title}`}
+                        className="absolute top-2 right-2 p-1 rounded hover:bg-accent/50 transition-colors shrink-0 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                       >
-                        <MoreVertical className="h-3.5 w-3.5 text-muted-foreground/60" />
+                        <MoreVertical
+                          className="h-3.5 w-3.5 text-muted-foreground/60"
+                          aria-hidden="true"
+                        />
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48">
@@ -837,15 +989,23 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                           handleCopyTranscript(search.videoId);
                         }}
                         className="cursor-pointer"
+                        aria-label={
+                          copiedTranscript === search.videoId
+                            ? "Transcript copied"
+                            : "Copy transcript"
+                        }
                       >
                         {copiedTranscript === search.videoId ? (
                           <>
-                            <Check className="h-4 w-4 mr-2" />
+                            <Check
+                              className="h-4 w-4 mr-2"
+                              aria-hidden="true"
+                            />
                             Copied
                           </>
                         ) : (
                           <>
-                            <Copy className="h-4 w-4 mr-2" />
+                            <Copy className="h-4 w-4 mr-2" aria-hidden="true" />
                             Copy Transcript
                           </>
                         )}
@@ -856,18 +1016,38 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                           handleCopyUrl(search.url);
                         }}
                         className="cursor-pointer"
+                        aria-label={
+                          copiedUrl === search.url ? "URL copied" : "Copy URL"
+                        }
                       >
                         {copiedUrl === search.url ? (
                           <>
-                            <Check className="h-4 w-4 mr-2" />
+                            <Check
+                              className="h-4 w-4 mr-2"
+                              aria-hidden="true"
+                            />
                             Copied
                           </>
                         ) : (
                           <>
-                            <Copy className="h-4 w-4 mr-2" />
+                            <Copy className="h-4 w-4 mr-2" aria-hidden="true" />
                             Copy URL
                           </>
                         )}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteClick(search.videoId, e);
+                        }}
+                        className="cursor-pointer text-red-500 focus:text-red-500 focus:bg-red-500/10"
+                        aria-label={`Delete ${search.title}`}
+                      >
+                        <Trash2
+                          className="h-4 w-4 mr-2 text-red-500"
+                          aria-hidden="true"
+                        />
+                        Delete
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -973,299 +1153,379 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
               </div>
             )}
             <div className="flex gap-4">
-          {/* Transcript Content */}
-          <div className="flex-1 space-y-2">
-            <div className="space-y-2">
-              <h3 className="text-xs font-medium text-muted-foreground/50 uppercase tracking-wider px-2">
-                Transcript
-              </h3>
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center border border-border rounded-md p-0.5 bg-input shadow-sm">
-                  <button
-                    onClick={() => setShowTimestamps(true)}
-                    disabled={isPending}
-                    className={`h-7 px-3 text-xs rounded-sm transition-colors flex-1 whitespace-nowrap ${
-                      showTimestamps
-                        ? "bg-background text-foreground"
-                        : "bg-transparent text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Timestamps
-                  </button>
-                  <button
-                    onClick={() => setShowTimestamps(false)}
-                    disabled={isPending}
-                    className={`h-7 px-3 text-xs rounded-sm transition-colors flex-1 whitespace-nowrap ${
-                      !showTimestamps
-                        ? "bg-background text-foreground"
-                        : "bg-transparent text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    No timestamps
-                  </button>
+              {/* Transcript Content */}
+              <div className="flex-1 space-y-2">
+                <div className="space-y-2">
+                  <h3 className="text-xs font-medium text-muted-foreground/50 uppercase tracking-wider px-2">
+                    Transcript
+                  </h3>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center border border-border rounded-md p-0.5 bg-input shadow-sm">
+                      <button
+                        onClick={() => setShowTimestamps(true)}
+                        disabled={isPending}
+                        aria-pressed={showTimestamps}
+                        aria-label="Show timestamps"
+                        className={`h-7 px-3 text-xs rounded-sm transition-colors flex-1 whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
+                          showTimestamps
+                            ? "bg-background text-foreground"
+                            : "bg-transparent text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        Timestamps
+                      </button>
+                      <button
+                        onClick={() => setShowTimestamps(false)}
+                        disabled={isPending}
+                        aria-pressed={!showTimestamps}
+                        aria-label="Hide timestamps"
+                        className={`h-7 px-3 text-xs rounded-sm transition-colors flex-1 whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
+                          !showTimestamps
+                            ? "bg-background text-foreground"
+                            : "bg-transparent text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        No timestamps
+                      </button>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCopy}
+                      disabled={isPending || !displayState?.transcript}
+                      className="gap-2 text-xs"
+                      aria-label={
+                        copied ? "Transcript copied" : "Copy transcript"
+                      }
+                    >
+                      {copied ? (
+                        <>
+                          <Check className="h-4 w-4" aria-hidden="true" />
+                          Copied
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-4 w-4" aria-hidden="true" />
+                          Copy
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCopy}
-                  disabled={isPending || !displayState?.transcript}
-                  className="gap-2 text-xs"
-                >
-                  {copied ? (
-                    <>
-                      <Check className="h-4 w-4" />
-                      Copied
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="h-4 w-4" />
-                      Copy
-                    </>
-                  )}
-                </Button>
-              </div>
-            </div>
-            <div className="bg-card border border-border rounded-md shadow-layered">
-              <div className="p-4">
-                {isPending ? (
-                  <div className="flex items-center justify-center py-12">
-                    <p className="text-sm text-muted-foreground">Loading...</p>
-                  </div>
-                ) : displayState?.transcript ? (
-                  showTimestamps ? (
-                    <div className="space-y-2 max-h-96 overflow-y-auto">
-                      {(() => {
-                        // Detect unit format once based on first item (consistent with backend)
-                        const firstItem = displayState.transcript[0];
-                        const sampleOffset = firstItem?.offset ?? 0;
-                        const likelyMilliseconds = sampleOffset > 1000;
-
-                        return displayState.transcript.map((item, index) => {
-                          const offsetValue =
-                            typeof item.offset === "number" &&
-                            !isNaN(item.offset)
-                              ? item.offset
-                              : 0;
-
-                          // Use consistent detection based on first item
-                          const seconds = likelyMilliseconds
-                            ? offsetValue / 1000
-                            : offsetValue;
-
-                          const timestamp = formatTimestamp(seconds);
-                          const timestampSeconds = Math.floor(seconds);
-                          const videoUrl = lastSubmittedUrl 
-                            ? `${lastSubmittedUrl}&t=${timestampSeconds}s`
-                            : null;
-                          
-                          return (
-                            <div
-                              key={index}
-                              className="flex gap-3 items-baseline"
-                            >
-                              {videoUrl ? (
-                                <a
-                                  href={videoUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-muted-foreground hover:text-primary text-xs font-mono shrink-0 tabular-nums transition-colors cursor-pointer"
-                                >
-                                  {timestamp}
-                                </a>
-                              ) : (
-                                <span className="text-muted-foreground text-xs font-mono shrink-0 tabular-nums">
-                                  {timestamp}
-                                </span>
-                              )}
-                              <span className="text-sm font-mono leading-relaxed flex-1">
-                                {item.text}
-                              </span>
-                            </div>
-                          );
-                        });
-                      })()}
-                    </div>
-                  ) : (
-                    <div className="max-h-96 overflow-y-auto">
-                      <pre className="text-sm font-mono leading-relaxed text-foreground whitespace-pre-wrap">
-                        {displayState.transcript
-                          .map((item) => item.text)
-                          .join(" ")}
-                      </pre>
-                    </div>
-                  )
-                ) : null}
-              </div>
-            </div>
-          </div>
-
-          {/* Video Recents Sidebar - Show when there are recent searches OR when loading */}
-          {(recentSearches.length > 0 || isPending) && (
-            <div className="w-64 shrink-0 space-y-2">
-              <h3 className="text-xs font-medium text-muted-foreground/50 uppercase tracking-wider px-2">
-                Recents
-              </h3>
-              <div className="space-y-1.5">
-                {loadingVideoId && recentSearches.length === 0 ? (
-                  // Show skeleton placeholder when loading with no prior history
-                  <div className="p-1.5 rounded-md animate-pulse">
-                    <div className="flex gap-3">
-                      <div className="relative w-16 h-10 shrink-0 bg-muted rounded"></div>
-                      <div className="flex-1 min-w-0 space-y-2">
-                        <div className="h-4 bg-muted rounded w-3/4"></div>
-                        <div className="flex items-center gap-1.5">
-                          <div className="h-3 w-3 bg-muted rounded"></div>
-                          <div className="h-3 bg-muted rounded w-16"></div>
-                        </div>
+                <div className="bg-card border border-border rounded-md shadow-layered">
+                  <div className="p-4">
+                    {isPending ? (
+                      <div className="flex items-center justify-center py-12">
+                        <p className="text-sm text-muted-foreground">
+                          Loading...
+                        </p>
                       </div>
-                    </div>
-                  </div>
-                ) : null}
-                {loadingVideoId && recentSearches.length > 0 ? (
-                  // Show skeleton placeholder for the currently loading item at the top
-                  // This skeleton has no metadata - it's just a placeholder
-                  <div className="p-1.5 rounded-md animate-pulse">
-                    <div className="flex gap-3">
-                      <div className="relative w-16 h-10 shrink-0 bg-muted rounded"></div>
-                      <div className="flex-1 min-w-0 space-y-2">
-                        <div className="h-4 bg-muted rounded w-3/4"></div>
-                        <div className="flex items-center gap-1.5">
-                          <div className="h-3 w-3 bg-muted rounded"></div>
-                          <div className="h-3 bg-muted rounded w-16"></div>
+                    ) : displayState?.transcript ? (
+                      showTimestamps ? (
+                        <div className="space-y-2 max-h-96 overflow-y-auto">
+                          {(() => {
+                            // Detect unit format once based on first item (consistent with backend)
+                            const firstItem = displayState.transcript[0];
+                            const sampleOffset = firstItem?.offset ?? 0;
+                            const likelyMilliseconds = sampleOffset > 1000;
+
+                            return displayState.transcript.map(
+                              (item, index) => {
+                                const offsetValue =
+                                  typeof item.offset === "number" &&
+                                  !isNaN(item.offset)
+                                    ? item.offset
+                                    : 0;
+
+                                // Use consistent detection based on first item
+                                const seconds = likelyMilliseconds
+                                  ? offsetValue / 1000
+                                  : offsetValue;
+
+                                const timestamp = formatTimestamp(seconds);
+                                const timestampSeconds = Math.floor(seconds);
+                                const videoUrl = lastSubmittedUrl
+                                  ? `${lastSubmittedUrl}&t=${timestampSeconds}s`
+                                  : null;
+
+                                return (
+                                  <div
+                                    key={index}
+                                    className="flex gap-3 items-baseline"
+                                  >
+                                    {videoUrl ? (
+                                      <a
+                                        href={videoUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-muted-foreground hover:text-primary text-xs font-mono shrink-0 tabular-nums transition-colors cursor-pointer"
+                                      >
+                                        {timestamp}
+                                      </a>
+                                    ) : (
+                                      <span className="text-muted-foreground text-xs font-mono shrink-0 tabular-nums">
+                                        {timestamp}
+                                      </span>
+                                    )}
+                                    <span className="text-sm font-mono leading-relaxed flex-1">
+                                      {item.text}
+                                    </span>
+                                  </div>
+                                );
+                              }
+                            );
+                          })()}
                         </div>
-                      </div>
-                    </div>
+                      ) : (
+                        <div className="max-h-96 overflow-y-auto">
+                          <pre className="text-sm font-mono leading-relaxed text-foreground whitespace-pre-wrap">
+                            {displayState.transcript
+                              .map((item) => item.text)
+                              .join(" ")}
+                          </pre>
+                        </div>
+                      )
+                    ) : null}
                   </div>
-                ) : null}
-                {recentSearches
-                  .filter((search) => {
-                    // Always filter out the loading video ID to prevent duplicates
-                    // This ensures old metadata doesn't show while loading
-                    if (loadingVideoId && search.videoId === loadingVideoId) {
-                      console.log(
-                        "[v0] Filtering out loading video from history display:",
-                        search.videoId,
-                        "to prevent showing old metadata"
-                      );
-                      return false;
-                    }
-                    return true;
-                  })
-                  .map((search) => {
-                    const isSelected = selectedVideoId === search.videoId;
-                    return (
-                      <div key={search.videoId} className="relative group">
-                        <button
-                          onClick={(e) =>
-                            handleRecentSearchClick(search.url, e)
-                          }
-                          className={`w-full text-left p-1.5 rounded-md transition-colors border ${
-                            isSelected
-                              ? "bg-accent text-foreground border-border"
-                              : "border-transparent text-foreground/90 hover:bg-accent/30 hover:text-foreground"
-                          }`}
-                        >
-                          <div className="flex gap-3 items-start">
-                            <div className="relative w-16 h-14 shrink-0">
-                              <Image
-                                src={search.thumbnail}
-                                alt={search.title}
-                                fill
-                                className="object-cover rounded"
-                                unoptimized
-                              />
-                            </div>
-                            <div className="flex-1 min-w-0 flex flex-col gap-1">
-                              <div className="flex items-start gap-2">
-                                <p className="text-sm font-medium line-clamp-2 leading-tight text-foreground flex-1 min-w-0">
-                                  {search.title}
-                                </p>
-                                <div className="w-7 shrink-0" />
-                              </div>
-                              {search.channelName && (
-                                <div>
-                                  <span className="text-xs text-muted-foreground/70">
-                                    {search.channelName}
-                                  </span>
-                                </div>
-                              )}
-                              {search.duration && (
-                                <div className="flex items-center gap-1.5">
-                                  <Clock className="h-3 w-3 text-muted-foreground/70" />
-                                  <span className="text-xs text-muted-foreground/80 leading-none">
-                                    {search.duration}
-                                  </span>
-                                </div>
-                              )}
+                </div>
+              </div>
+
+              {/* Video Recents Sidebar - Show when there are recent searches OR when loading */}
+              {(recentSearches.length > 0 || isPending) && (
+                <div className="w-64 shrink-0 space-y-2">
+                  <h3 className="text-xs font-medium text-muted-foreground/50 uppercase tracking-wider px-2">
+                    Recents
+                  </h3>
+                  <div
+                    className="space-y-1.5"
+                    role="list"
+                    aria-label="Recent searches"
+                  >
+                    {loadingVideoId && recentSearches.length === 0 ? (
+                      // Show skeleton placeholder when loading with no prior history
+                      <div
+                        className="p-1.5 rounded-md animate-pulse"
+                        role="status"
+                        aria-label="Loading"
+                      >
+                        <div className="flex gap-3">
+                          <div className="relative w-16 h-10 shrink-0 bg-muted rounded"></div>
+                          <div className="flex-1 min-w-0 space-y-2">
+                            <div className="h-4 bg-muted rounded w-3/4"></div>
+                            <div className="flex items-center gap-1.5">
+                              <div className="h-3 w-3 bg-muted rounded"></div>
+                              <div className="h-3 bg-muted rounded w-16"></div>
                             </div>
                           </div>
-                        </button>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button
-                              onClick={(e) => e.stopPropagation()}
-                              className="absolute top-2 right-2 p-1 rounded hover:bg-accent/50 transition-colors shrink-0"
-                            >
-                              <MoreVertical className="h-3.5 w-3.5 text-muted-foreground/60" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48">
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleCopyTranscript(search.videoId);
-                              }}
-                              className="cursor-pointer"
-                            >
-                              {copiedTranscript === search.videoId ? (
-                                <>
-                                  <Check className="h-4 w-4 mr-2" />
-                                  Copied
-                                </>
-                              ) : (
-                                <>
-                                  <Copy className="h-4 w-4 mr-2" />
-                                  Copy Transcript
-                                </>
-                              )}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleCopyUrl(search.url);
-                              }}
-                              className="cursor-pointer"
-                            >
-                              {copiedUrl === search.url ? (
-                                <>
-                                  <Check className="h-4 w-4 mr-2" />
-                                  Copied
-                                </>
-                              ) : (
-                                <>
-                                  <Copy className="h-4 w-4 mr-2" />
-                                  Copy URL
-                                </>
-                              )}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteClick(search.videoId, e);
-                              }}
-                              className="cursor-pointer text-red-500 focus:text-red-500 focus:bg-red-500/10"
-                            >
-                              <Trash2 className="h-4 w-4 mr-2 text-red-500" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        </div>
                       </div>
-                    );
-                  })}
-              </div>
-            </div>
-          )}
+                    ) : null}
+                    {loadingVideoId && recentSearches.length > 0 ? (
+                      // Show skeleton placeholder for the currently loading item at the top
+                      // This skeleton has no metadata - it's just a placeholder
+                      <div
+                        className="p-1.5 rounded-md animate-pulse"
+                        role="status"
+                        aria-label="Loading"
+                      >
+                        <div className="flex gap-3">
+                          <div className="relative w-16 h-10 shrink-0 bg-muted rounded"></div>
+                          <div className="flex-1 min-w-0 space-y-2">
+                            <div className="h-4 bg-muted rounded w-3/4"></div>
+                            <div className="flex items-center gap-1.5">
+                              <div className="h-3 w-3 bg-muted rounded"></div>
+                              <div className="h-3 bg-muted rounded w-16"></div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+                    {recentSearches
+                      .filter((search) => {
+                        // Always filter out the loading video ID to prevent duplicates
+                        // This ensures old metadata doesn't show while loading
+                        if (
+                          loadingVideoId &&
+                          search.videoId === loadingVideoId
+                        ) {
+                          console.log(
+                            "[v0] Filtering out loading video from history display:",
+                            search.videoId,
+                            "to prevent showing old metadata"
+                          );
+                          return false;
+                        }
+                        return true;
+                      })
+                      .map((search, index) => {
+                        const isSelected = selectedVideoId === search.videoId;
+                        // Adjust index for filtered array
+                        const displayIndex = recentSearches.findIndex(
+                          (s) => s.videoId === search.videoId
+                        );
+                        return (
+                          <div
+                            key={search.videoId}
+                            className="relative group"
+                            role="listitem"
+                          >
+                            <button
+                              ref={(el) => {
+                                recentSearchRefs.current[displayIndex] = el;
+                              }}
+                              onClick={(e) =>
+                                handleRecentSearchClick(search.url, e)
+                              }
+                              onKeyDown={(e) =>
+                                handleRecentSearchKeyDown(
+                                  e,
+                                  search.url,
+                                  displayIndex
+                                )
+                              }
+                              aria-label={`Load transcript for ${search.title}${
+                                search.channelName
+                                  ? ` by ${search.channelName}`
+                                  : ""
+                              }`}
+                              aria-pressed={isSelected}
+                              className={`w-full text-left p-1.5 rounded-md transition-colors border focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
+                                isSelected
+                                  ? "bg-accent text-foreground border-border"
+                                  : "border-transparent text-foreground/90 hover:bg-accent/30 hover:text-foreground focus:bg-accent/30"
+                              }`}
+                            >
+                              <div className="flex gap-3 items-start">
+                                <div className="relative w-16 h-14 shrink-0">
+                                  <Image
+                                    src={search.thumbnail}
+                                    alt={search.title}
+                                    fill
+                                    className="object-cover rounded"
+                                    unoptimized
+                                  />
+                                </div>
+                                <div className="flex-1 min-w-0 flex flex-col gap-1">
+                                  <div className="flex items-start gap-2">
+                                    <p className="text-sm font-medium line-clamp-2 leading-tight text-foreground flex-1 min-w-0">
+                                      {search.title}
+                                    </p>
+                                    <div className="w-7 shrink-0" />
+                                  </div>
+                                  {search.channelName && (
+                                    <div>
+                                      <span className="text-xs text-muted-foreground/70">
+                                        {search.channelName}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {search.duration && (
+                                    <div className="flex items-center gap-1.5">
+                                      <Clock className="h-3 w-3 text-muted-foreground/70" />
+                                      <span className="text-xs text-muted-foreground/80 leading-none">
+                                        {search.duration}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  onClick={(e) => e.stopPropagation()}
+                                  aria-label={`More options for ${search.title}`}
+                                  className="absolute top-2 right-2 p-1 rounded hover:bg-accent/50 transition-colors shrink-0 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                >
+                                  <MoreVertical
+                                    className="h-3.5 w-3.5 text-muted-foreground/60"
+                                    aria-hidden="true"
+                                  />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-48">
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleCopyTranscript(search.videoId);
+                                  }}
+                                  className="cursor-pointer"
+                                  aria-label={
+                                    copiedTranscript === search.videoId
+                                      ? "Transcript copied"
+                                      : "Copy transcript"
+                                  }
+                                >
+                                  {copiedTranscript === search.videoId ? (
+                                    <>
+                                      <Check
+                                        className="h-4 w-4 mr-2"
+                                        aria-hidden="true"
+                                      />
+                                      Copied
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Copy
+                                        className="h-4 w-4 mr-2"
+                                        aria-hidden="true"
+                                      />
+                                      Copy Transcript
+                                    </>
+                                  )}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleCopyUrl(search.url);
+                                  }}
+                                  className="cursor-pointer"
+                                  aria-label={
+                                    copiedUrl === search.url
+                                      ? "URL copied"
+                                      : "Copy URL"
+                                  }
+                                >
+                                  {copiedUrl === search.url ? (
+                                    <>
+                                      <Check
+                                        className="h-4 w-4 mr-2"
+                                        aria-hidden="true"
+                                      />
+                                      Copied
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Copy
+                                        className="h-4 w-4 mr-2"
+                                        aria-hidden="true"
+                                      />
+                                      Copy URL
+                                    </>
+                                  )}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteClick(search.videoId, e);
+                                  }}
+                                  className="cursor-pointer text-red-500 focus:text-red-500 focus:bg-red-500/10"
+                                  aria-label={`Delete ${search.title}`}
+                                >
+                                  <Trash2
+                                    className="h-4 w-4 mr-2 text-red-500"
+                                    aria-hidden="true"
+                                  />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
