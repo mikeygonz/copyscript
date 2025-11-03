@@ -265,7 +265,10 @@ export async function getTranscript(_prevState: TranscriptState, formData: FormD
     if (urlObj.hostname.includes("youtube.com")) {
       videoId = urlObj.searchParams.get("v")
     } else if (urlObj.hostname.includes("youtu.be")) {
-      videoId = urlObj.pathname.slice(1)
+      // Handle youtu.be URLs - extract video ID from pathname, removing any query params
+      const pathname = urlObj.pathname.slice(1) // Remove leading slash
+      // Split by '/' or '?' to get just the video ID (in case there are extra path segments or query params)
+      videoId = pathname.split('/')[0].split('?')[0] || null
     }
 
     if (!videoId) {

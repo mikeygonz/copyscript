@@ -167,7 +167,11 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
       if (urlObj.hostname.includes("youtube.com")) {
         return urlObj.searchParams.get("v");
       } else if (urlObj.hostname.includes("youtu.be")) {
-        return urlObj.pathname.slice(1);
+        // Handle youtu.be URLs - extract video ID from pathname, removing any query params
+        const pathname = urlObj.pathname.slice(1); // Remove leading slash
+        // Split by '/' or '?' to get just the video ID (in case there are extra path segments or query params)
+        const videoId = pathname.split('/')[0].split('?')[0];
+        return videoId || null;
       }
       return null;
     } catch {
