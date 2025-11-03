@@ -252,7 +252,6 @@ export async function getTranscript(_prevState: TranscriptState, formData: FormD
   const url = formData.get("url") as string
   console.log("[v0] getTranscript called with URL:", url)
   console.log("[v0] FormData entries:", Array.from(formData.entries()))
-  console.log("[v0] User agent:", typeof window !== 'undefined' ? navigator.userAgent : 'server-side')
 
   if (!url || url.trim() === "") {
     console.log("[v0] No URL provided in form data")
