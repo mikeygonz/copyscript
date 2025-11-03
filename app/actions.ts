@@ -13,6 +13,7 @@ type VideoMetadata = {
   thumbnail: string
   duration: string
   channelName?: string
+  channelUrl?: string
 }
 
 type TranscriptState = {
@@ -108,6 +109,7 @@ async function getYoutubeVideoMetadata(videoId: string, transcriptItems?: Transc
       thumbnail: data.thumbnail_url || `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
       duration,
       channelName: data.author_name || undefined,
+      channelUrl: data.author_url || undefined,
     }
   } catch (error) {
     console.log("[v0] ERROR fetching video metadata:", error)

@@ -176,4 +176,59 @@
       0 4px 8px -2px rgba(0, 0, 0, 0.1),
       0 0.5px 0 rgba(255, 255, 255, 0.05);
   }
+  
+  .input-figma-style {
+    border-radius: 12px;
+    background: linear-gradient(99deg, rgba(255, 255, 255, 0.05) -6.05%, rgba(201, 201, 201, 0.05) 78.28%);
+    box-shadow: 
+      0 0.5px 0 -1px rgba(255, 255, 255, 0.20) inset,
+      0 1px 1px 0 rgba(255, 255, 255, 0.05) inset,
+      0 4px 6px -3px rgba(0, 0, 0, 0.10),
+      0 1px 4px -2px rgba(0, 0, 0, 0.10),
+      0 1px 2px -1px rgba(0, 0, 0, 0.10),
+      0 1px 1px -1px rgba(0, 0, 0, 0.10),
+      0 1px 0 -1px rgba(0, 0, 0, 0.10);
+  }
+  
+  .shadow-highlight {
+    box-shadow: 
+      inset 0px 0px 0px 1px var(--tw-shadow-color),
+      inset 0px 1px 0px var(--tw-shadow-color);
+  }
+  
+  .button-figma-style {
+    border-radius: 12px;
+    background: linear-gradient(109deg, rgba(255, 255, 255, 0.09) -10.38%, rgba(153, 153, 153, 0.09) 116.2%);
+    box-shadow: 
+      0 0.5px 0 -1px rgba(255, 255, 255, 0.20) inset,
+      0 1px 1px 0 rgba(255, 255, 255, 0.05) inset,
+      0 4px 6px -3px rgba(0, 0, 0, 0.10),
+      0 1px 4px -2px rgba(0, 0, 0, 0.10),
+      0 1px 2px -1px rgba(0, 0, 0, 0.10),
+      0 1px 1px -1px rgba(0, 0, 0, 0.10),
+      0 1px 0 -1px rgba(0, 0, 0, 0.10);
+    transition: transform 0.05s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.05s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .button-figma-style:active {
+    transform: scale(0.975) translateY(0.5px);
+    box-shadow: 
+      0 1px 2px -1px rgba(0, 0, 0, 0.08),
+      0 0.5px 1px -1px rgba(0, 0, 0, 0.06),
+      inset 0 1px 2px 0 rgba(0, 0, 0, 0.15),
+      inset 0 0.5px 1px 0 rgba(0, 0, 0, 0.20),
+      inset 0 -0.5px 0 0 rgba(255, 255, 255, 0.08);
+  }
+  
+  .button-figma-style:hover:not(:active) {
+    transform: translateY(-0.5px);
+    box-shadow: 
+      0 5px 8px -3px rgba(0, 0, 0, 0.12),
+      0 2px 4px -2px rgba(0, 0, 0, 0.10),
+      0 1px 2px -1px rgba(0, 0, 0, 0.10),
+      0 1px 1px -1px rgba(0, 0, 0, 0.10),
+      0 1px 0 -1px rgba(0, 0, 0, 0.10),
+      0 0.5px 0 -1px rgba(255, 255, 255, 0.22) inset,
+      0 1px 1px 0 rgba(255, 255, 255, 0.06) inset;
+  }
 }
