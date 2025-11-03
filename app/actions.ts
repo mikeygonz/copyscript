@@ -120,25 +120,87 @@ async function getYoutubeVideoMetadata(videoId: string, transcriptItems?: Transc
 async function getYoutubeTranscript(videoId: string): Promise<TranscriptItem[]> {
   console.log("[v0] Fetching transcript for video:", videoId)
 
-  try {
-    // Try to fetch transcript with retry logic for better reliability
-    let transcriptItems;
-    let lastError;
+  // Retry function with exponential backoff
+  const retryWithBackoff = async (
+    fn: () => Promise<any>,
+    maxRetries: number = 3,
+    baseDelay: number = 1000
+  ): Promise<any> => {
+    let lastError: Error | null = null;
     
-    // Attempt with English first, then try without language specification
-    try {
-      transcriptItems = await YoutubeTranscript.fetchTranscript(videoId, {
-        lang: 'en'
-      })
-    } catch (error) {
-      console.log("[v0] Failed with lang=en, trying without language:", error)
-      lastError = error;
-      // Retry without language specification
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
-        transcriptItems = await YoutubeTranscript.fetchTranscript(videoId)
+        return await fn();
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        const errorMessage = lastError.message.toLowerCase();
+        
+        // Don't retry on certain errors
+        if (
+          errorMessage.includes('transcript disabled') ||
+          errorMessage.includes('transcript not available') ||
+          errorMessage.includes('private') ||
+          errorMessage.includes('restricted') ||
+          errorMessage.includes('video unavailable') ||
+          errorMessage.includes('video not found')
+        ) {
+          throw lastError;
+        }
+        
+        // If not the last attempt, wait before retrying
+        if (attempt < maxRetries - 1) {
+          const delay = baseDelay * Math.pow(2, attempt);
+          console.log(`[v0] Attempt ${attempt + 1} failed, retrying in ${delay}ms...`, errorMessage);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+    
+    throw lastError || new Error('Failed to fetch transcript after retries');
+  };
+
+  try {
+    // Try multiple strategies with retry logic
+    let transcriptItems;
+    let lastError: Error | null = null;
+    
+    // Strategy 1: Try with English language
+    try {
+      transcriptItems = await retryWithBackoff(
+        () => YoutubeTranscript.fetchTranscript(videoId, { lang: 'en' }),
+        3,
+        1000
+      );
+      console.log("[v0] Successfully fetched with lang=en");
+    } catch (error) {
+      console.log("[v0] Failed with lang=en:", error);
+      lastError = error instanceof Error ? error : new Error(String(error));
+      
+      // Strategy 2: Try without language specification
+      try {
+        transcriptItems = await retryWithBackoff(
+          () => YoutubeTranscript.fetchTranscript(videoId),
+          3,
+          1000
+        );
+        console.log("[v0] Successfully fetched without language spec");
       } catch (retryError) {
-        console.log("[v0] Failed without language spec:", retryError)
-        throw retryError instanceof Error ? retryError : lastError;
+        console.log("[v0] Failed without language spec:", retryError);
+        const retryErrorObj = retryError instanceof Error ? retryError : new Error(String(retryError));
+        
+        // Strategy 3: Try with 'en-US' as fallback
+        try {
+          transcriptItems = await retryWithBackoff(
+            () => YoutubeTranscript.fetchTranscript(videoId, { lang: 'en-US' }),
+            2,
+            1500
+          );
+          console.log("[v0] Successfully fetched with lang=en-US");
+        } catch (fallbackError) {
+          console.log("[v0] Failed with lang=en-US:", fallbackError);
+          // Throw the most descriptive error
+          throw retryErrorObj;
+        }
       }
     }
     console.log("[v0] Successfully fetched", transcriptItems.length, "transcript items")
@@ -261,9 +323,28 @@ export async function getTranscript(_prevState: TranscriptState, formData: FormD
   // Extract video ID from URL
   let videoId: string | null = null
   try {
-    const urlObj = new URL(url)
+    // Normalize URL - handle mobile URLs and remove tracking parameters
+    let normalizedUrl = url.trim()
+    
+    // Handle URLs without protocol
+    if (!normalizedUrl.startsWith('http://') && !normalizedUrl.startsWith('https://')) {
+      normalizedUrl = 'https://' + normalizedUrl
+    }
+    
+    const urlObj = new URL(normalizedUrl)
+    
+    // Handle all YouTube domain variations (youtube.com, m.youtube.com, www.youtube.com, etc.)
     if (urlObj.hostname.includes("youtube.com")) {
       videoId = urlObj.searchParams.get("v")
+      
+      // Also check for video ID in path for mobile URLs like /watch/v/VIDEO_ID
+      if (!videoId && urlObj.pathname.includes('/watch/')) {
+        const pathParts = urlObj.pathname.split('/')
+        const watchIndex = pathParts.indexOf('watch')
+        if (watchIndex >= 0 && pathParts[watchIndex + 1]) {
+          videoId = pathParts[watchIndex + 1]
+        }
+      }
     } else if (urlObj.hostname.includes("youtu.be")) {
       // Handle youtu.be URLs - extract video ID from pathname, removing any query params
       const pathname = urlObj.pathname.slice(1) // Remove leading slash
@@ -271,16 +352,35 @@ export async function getTranscript(_prevState: TranscriptState, formData: FormD
       videoId = pathname.split('/')[0].split('?')[0] || null
     }
 
-    if (!videoId) {
-      return { error: "Invalid YouTube URL" }
+    // Clean up video ID - remove any invalid characters
+    if (videoId) {
+      videoId = videoId.trim()
+      // YouTube video IDs are typically 11 characters alphanumeric
+      // But allow for edge cases and validate format
+      if (videoId.length === 0) {
+        videoId = null
+      }
     }
-    console.log("[v0] Extracted video ID:", videoId)
-  } catch {
-    return { error: "Invalid URL format" }
+
+    if (!videoId) {
+      console.log("[v0] Could not extract video ID from URL:", url)
+      return { error: "Invalid YouTube URL. Please make sure the URL contains a valid video ID." }
+    }
+    console.log("[v0] Extracted video ID:", videoId, "from URL:", url)
+  } catch (error) {
+    console.log("[v0] Error parsing URL:", url, error)
+    return { error: `Invalid URL format: ${error instanceof Error ? error.message : "Unknown error"}` }
   }
 
   try {
-    const transcript = await getYoutubeTranscript(videoId)
+    // Add timeout to prevent hanging on slow mobile networks
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error("Request timeout: The request took too long. Please try again.")), 30000) // 30 second timeout
+    })
+    
+    const transcriptPromise = getYoutubeTranscript(videoId)
+    const transcript = await Promise.race([transcriptPromise, timeoutPromise])
+    
     const metadata = await getYoutubeVideoMetadata(videoId, transcript)
     console.log("[v0] SUCCESS: Transcript fetched, length:", transcript.length)
     return { transcript, metadata: metadata || undefined }
@@ -295,6 +395,13 @@ export async function getTranscript(_prevState: TranscriptState, formData: FormD
       userFriendlyError = "This video's transcript is not available. Some videos have transcripts disabled by the creator."
     } else if (errorMessage.toLowerCase().includes("could not retrieve")) {
       userFriendlyError = "Unable to retrieve transcript. The video may not have captions available."
+    } else if (errorMessage.toLowerCase().includes("timeout") ||
+               errorMessage.toLowerCase().includes("took too long")) {
+      userFriendlyError = "The request timed out. This can happen on slow networks. Please try again."
+    } else if (errorMessage.toLowerCase().includes("network") ||
+               errorMessage.toLowerCase().includes("fetch") ||
+               errorMessage.toLowerCase().includes("connection")) {
+      userFriendlyError = "Network error. Please check your connection and try again."
     }
     
     // Provide more specific error messages
