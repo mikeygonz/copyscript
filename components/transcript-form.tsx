@@ -649,11 +649,11 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
       {showHeader && (
         <div
           className={cn(
-            "fixed top-0 left-0 right-0 h-auto sm:h-[65px] min-h-[60px] bg-background z-50 flex items-center px-3 sm:px-4 py-2 sm:py-0",
+            "fixed top-0 left-0 right-0 bg-background z-50 px-3 sm:px-4",
             showBorder && "border-b border-border"
           )}
         >
-          <div className="w-full flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-4 py-2 sm:py-0">
+          <div className="w-full flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-4 py-3 sm:py-0 sm:h-[65px]">
             {/* Logo - Left */}
             <svg
               className="h-6 sm:h-7 select-none cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0"
@@ -783,7 +783,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
       )}
 
       {/* Spacer for fixed header */}
-      {showHeader && <div className="h-[80px] sm:h-[65px]" />}
+      {showHeader && <div className="h-[100px] sm:h-[65px]" />}
 
       {/* Main search form - hidden when transcript is showing */}
       {!showHeader && (
