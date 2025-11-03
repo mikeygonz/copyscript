@@ -25,6 +25,11 @@ export const metadata: Metadata = {
   title: "YouTube transcript.",
   description: "Created with v0",
   generator: "v0.app",
+  viewport: {
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 5,
+  },
 };
 
 export default function RootLayout({

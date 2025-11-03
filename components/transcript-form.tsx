@@ -598,12 +598,12 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
 
   return (
     <div
-      className="space-y-6"
+      className="space-y-4 sm:space-y-6"
       onClick={!showHeader ? handleHomeClick : undefined}
     >
       {/* Logo - Fixed top left in home view */}
       {!showHeader && (
-        <div className="fixed top-0 left-0 right-0 h-[65px] z-50 flex items-center px-4 pointer-events-none">
+        <div className="fixed top-0 left-0 right-0 h-[60px] sm:h-[65px] z-50 flex items-center px-3 sm:px-4 pointer-events-none">
           <svg
             className="h-7 select-none cursor-pointer hover:opacity-80 transition-opacity pointer-events-auto"
             viewBox="0 0 120 24"
@@ -649,14 +649,14 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
       {showHeader && (
         <div
           className={cn(
-            "fixed top-0 left-0 right-0 h-[65px] bg-background z-50 flex items-center px-4",
+            "fixed top-0 left-0 right-0 h-[60px] sm:h-[65px] bg-background z-50 flex items-center px-3 sm:px-4",
             showBorder && "border-b border-border"
           )}
         >
-          <div className="w-full flex items-center justify-between gap-4">
+          <div className="w-full flex items-center justify-between gap-2 sm:gap-4">
             {/* Logo - Left */}
             <svg
-              className="h-7 select-none cursor-pointer hover:opacity-80 transition-opacity"
+              className="h-6 sm:h-7 select-none cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0"
               viewBox="0 0 120 24"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
@@ -692,7 +692,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
             </svg>
 
             {/* Search Form - Centered */}
-            <div className="flex-1 flex justify-center">
+            <div className="flex-1 flex justify-center min-w-0">
               <form
                 action={formAction}
                 onSubmit={(e) => {
@@ -739,14 +739,14 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                 }}
                 className="w-full max-w-[800px]"
               >
-                <div className="flex gap-2 items-center">
+                <div className="flex gap-1.5 sm:gap-2 items-center">
                   <Input
                     type="url"
                     name="url"
                     placeholder="https://youtube.com/watch?v=..."
                     disabled={isPending}
                     className={cn(
-                      "flex-1",
+                      "flex-1 text-sm sm:text-base min-w-0",
                       (validationError || state?.error) && "aria-invalid"
                     )}
                     aria-invalid={!!(validationError || state?.error)}
@@ -765,7 +765,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                   <Button
                     type="submit"
                     disabled={isPending}
-                    className="font-normal text-sm"
+                    className="font-normal text-xs sm:text-sm whitespace-nowrap flex-shrink-0"
                     aria-label={
                       isPending ? "Fetching transcript" : "Get transcript"
                     }
@@ -783,7 +783,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
       )}
 
       {/* Spacer for fixed header */}
-      {showHeader && <div className="h-[65px]" />}
+      {showHeader && <div className="h-[60px] sm:h-[65px]" />}
 
       {/* Main search form - hidden when transcript is showing */}
       {!showHeader && (
@@ -835,14 +835,14 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
         >
           <div className="space-y-1 max-w-2xl mx-auto">
             <div className="flex gap-2">
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <Input
                   ref={mainInputRef}
                   type="url"
                   name="url"
                   placeholder="https://youtube.com/watch?v=..."
                   disabled={isPending}
-                  className={cn(hasError && "aria-invalid")}
+                  className={cn("text-base sm:text-base", hasError && "aria-invalid")}
                   aria-invalid={hasError}
                   aria-describedby={hasError ? errorId : undefined}
                   aria-errormessage={hasError ? errorId : undefined}
@@ -880,7 +880,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
               <Button
                 type="submit"
                 disabled={isPending}
-                className="font-normal text-sm"
+                className="font-normal text-sm whitespace-nowrap flex-shrink-0"
                 aria-label={
                   isPending ? "Fetching transcript" : "Get transcript"
                 }
@@ -928,14 +928,14 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                       search.channelName ? ` by ${search.channelName}` : ""
                     }`}
                     aria-pressed={isSelected}
-                    className={`w-full text-left p-1.5 rounded-md transition-colors border focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
+                    className={`w-full text-left p-2 sm:p-1.5 rounded-md transition-colors border focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 min-h-[44px] sm:min-h-auto ${
                       isSelected
                         ? "bg-accent text-foreground border-border"
-                        : "border-transparent text-foreground/90 hover:bg-accent/30 hover:text-foreground focus:bg-accent/30"
+                        : "border-transparent text-foreground/90 hover:bg-accent/30 hover:text-foreground focus:bg-accent/30 active:bg-accent/50"
                     }`}
                   >
                     <div className="flex gap-3 items-start">
-                      <div className="relative w-16 h-14 shrink-0">
+                      <div className="relative w-16 h-14 shrink-0 flex-shrink-0">
                         <Image
                           src={search.thumbnail}
                           alt={search.title}
@@ -1061,11 +1061,11 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
       {(isPending ||
         (displayState?.transcript &&
           (recentSearches.length > 0 || selectedVideoId !== null))) && (
-        <div className="w-screen -mx-[calc((100vw-100%)/2)] px-1 pb-1">
+        <div className="w-screen -mx-[calc((100vw-100%)/2)] px-2 sm:px-4 pb-1">
           <div className="max-w-[943px] mx-auto">
             {/* Video Metadata Header */}
             {displayState?.metadata && (
-              <div className="mb-4 px-2 space-y-2">
+              <div className="mb-3 sm:mb-4 px-2 space-y-2">
                 {lastSubmittedUrl ? (
                   <a
                     href={lastSubmittedUrl}
@@ -1073,12 +1073,12 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                     rel="noopener noreferrer"
                     className="block"
                   >
-                    <h2 className="text-lg font-semibold text-foreground hover:text-primary transition-colors">
+                    <h2 className="text-base sm:text-lg font-semibold text-foreground hover:text-primary transition-colors break-words">
                       {displayState.metadata.title}
                     </h2>
                   </a>
                 ) : (
-                  <h2 className="text-lg font-semibold text-foreground">
+                  <h2 className="text-base sm:text-lg font-semibold text-foreground break-words">
                     {displayState.metadata.title}
                   </h2>
                 )}
@@ -1128,7 +1128,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                     )}
                     {displayState.metadata.duration && (
                       <>
-                        <span>•</span>
+                        <span>?</span>
                         <div className="flex items-center gap-1">
                           <Clock className="h-3.5 w-3.5" />
                           <span>{displayState.metadata.duration}</span>
@@ -1137,7 +1137,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                     )}
                     {lastSubmittedUrl && (
                       <>
-                        <span>•</span>
+                        <span>?</span>
                         <a
                           href={lastSubmittedUrl}
                           target="_blank"
@@ -1152,21 +1152,21 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                 </div>
               </div>
             )}
-            <div className="flex gap-4">
+            <div className="flex flex-col lg:flex-row gap-4">
               {/* Transcript Content */}
-              <div className="flex-1 space-y-2">
+              <div className="flex-1 space-y-2 min-w-0">
                 <div className="space-y-2">
                   <h3 className="text-xs font-medium text-muted-foreground/50 uppercase tracking-wider px-2">
                     Transcript
                   </h3>
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center border border-border rounded-md p-0.5 bg-input shadow-sm">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center border border-border rounded-md p-0.5 bg-input shadow-sm flex-1 min-w-0">
                       <button
                         onClick={() => setShowTimestamps(true)}
                         disabled={isPending}
                         aria-pressed={showTimestamps}
                         aria-label="Show timestamps"
-                        className={`h-7 px-3 text-xs rounded-sm transition-colors flex-1 whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
+                        className={`h-8 sm:h-7 px-2 sm:px-3 text-xs rounded-sm transition-colors flex-1 whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 min-h-[44px] sm:min-h-auto ${
                           showTimestamps
                             ? "bg-background text-foreground"
                             : "bg-transparent text-muted-foreground hover:text-foreground"
@@ -1179,7 +1179,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                         disabled={isPending}
                         aria-pressed={!showTimestamps}
                         aria-label="Hide timestamps"
-                        className={`h-7 px-3 text-xs rounded-sm transition-colors flex-1 whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
+                        className={`h-8 sm:h-7 px-2 sm:px-3 text-xs rounded-sm transition-colors flex-1 whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 min-h-[44px] sm:min-h-auto ${
                           !showTimestamps
                             ? "bg-background text-foreground"
                             : "bg-transparent text-muted-foreground hover:text-foreground"
@@ -1193,7 +1193,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                       size="sm"
                       onClick={handleCopy}
                       disabled={isPending || !displayState?.transcript}
-                      className="gap-2 text-xs"
+                      className="gap-2 text-xs whitespace-nowrap flex-shrink-0 min-h-[44px] sm:min-h-auto"
                       aria-label={
                         copied ? "Transcript copied" : "Copy transcript"
                       }
@@ -1213,7 +1213,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                   </div>
                 </div>
                 <div className="bg-card border border-border rounded-md shadow-layered">
-                  <div className="p-4">
+                  <div className="p-3 sm:p-4">
                     {isPending ? (
                       <div className="flex items-center justify-center py-12">
                         <p className="text-sm text-muted-foreground">
@@ -1222,7 +1222,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                       </div>
                     ) : displayState?.transcript ? (
                       showTimestamps ? (
-                        <div className="space-y-2 max-h-96 overflow-y-auto">
+                        <div className="space-y-2 max-h-[60vh] sm:max-h-96 overflow-y-auto">
                           {(() => {
                             // Detect unit format once based on first item (consistent with backend)
                             const firstItem = displayState.transcript[0];
@@ -1277,7 +1277,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                           })()}
                         </div>
                       ) : (
-                        <div className="max-h-96 overflow-y-auto">
+                        <div className="max-h-[60vh] sm:max-h-96 overflow-y-auto">
                           <pre className="text-sm font-mono leading-relaxed text-foreground whitespace-pre-wrap">
                             {displayState.transcript
                               .map((item) => item.text)
@@ -1292,7 +1292,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
 
               {/* Video Recents Sidebar - Show when there are recent searches OR when loading */}
               {(recentSearches.length > 0 || isPending) && (
-                <div className="w-64 shrink-0 space-y-2">
+                <div className="w-full lg:w-64 shrink-0 space-y-2">
                   <h3 className="text-xs font-medium text-muted-foreground/50 uppercase tracking-wider px-2">
                     Recents
                   </h3>
@@ -1389,14 +1389,14 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                                   : ""
                               }`}
                               aria-pressed={isSelected}
-                              className={`w-full text-left p-1.5 rounded-md transition-colors border focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
+                              className={`w-full text-left p-2 sm:p-1.5 rounded-md transition-colors border focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 min-h-[44px] sm:min-h-auto ${
                                 isSelected
                                   ? "bg-accent text-foreground border-border"
-                                  : "border-transparent text-foreground/90 hover:bg-accent/30 hover:text-foreground focus:bg-accent/30"
+                                  : "border-transparent text-foreground/90 hover:bg-accent/30 hover:text-foreground focus:bg-accent/30 active:bg-accent/50"
                               }`}
                             >
                               <div className="flex gap-3 items-start">
-                                <div className="relative w-16 h-14 shrink-0">
+                                <div className="relative w-16 h-14 shrink-0 flex-shrink-0">
                                   <Image
                                     src={search.thumbnail}
                                     alt={search.title}

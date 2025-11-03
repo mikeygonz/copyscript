@@ -121,7 +121,10 @@ async function getYoutubeTranscript(videoId: string): Promise<TranscriptItem[]> 
   console.log("[v0] Fetching transcript for video:", videoId)
 
   try {
-    const transcriptItems = await YoutubeTranscript.fetchTranscript(videoId)
+    // Use desktop user agent to avoid mobile restrictions
+    const transcriptItems = await YoutubeTranscript.fetchTranscript(videoId, {
+      lang: 'en'
+    })
     console.log("[v0] Successfully fetched", transcriptItems.length, "transcript items")
     console.log("[v0] First item sample:", JSON.stringify(transcriptItems[0], null, 2))
     console.log("[v0] Sample offsets:", transcriptItems.slice(0, 5).map((item: any) => item.offset))
@@ -263,8 +266,18 @@ export async function getTranscript(_prevState: TranscriptState, formData: FormD
   } catch (error) {
     console.log("[v0] ERROR in getTranscript:", error)
     const errorMessage = error instanceof Error ? error.message : "Unknown error"
+    
+    // Check for common error messages and provide helpful feedback
+    let userFriendlyError = errorMessage
+    if (errorMessage.toLowerCase().includes("transcript disabled") || 
+        errorMessage.toLowerCase().includes("disabled for videos")) {
+      userFriendlyError = "This video's transcript is not available. Some videos have transcripts disabled by the creator."
+    } else if (errorMessage.toLowerCase().includes("could not retrieve")) {
+      userFriendlyError = "Unable to retrieve transcript. The video may not have captions available."
+    }
+    
     return {
-      error: `Unable to fetch transcript: ${errorMessage}`,
+      error: `Unable to fetch transcript: ${userFriendlyError}`,
     }
   }
 }
