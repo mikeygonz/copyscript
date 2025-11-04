@@ -161,20 +161,44 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
     return `${minutes}:${secs.toString().padStart(2, "0")}`;
   }
 
+  function normalizeUrl(url: string): string {
+    let normalizedUrl = url.trim();
+    // Handle URLs without protocol (common on mobile)
+    if (!normalizedUrl.startsWith('http://') && !normalizedUrl.startsWith('https://')) {
+      normalizedUrl = 'https://' + normalizedUrl;
+    }
+    return normalizedUrl;
+  }
+
   function extractVideoId(url: string): string | null {
     try {
-      const urlObj = new URL(url);
+      // Normalize URL - handle URLs without protocol
+      const normalizedUrl = normalizeUrl(url);
+      
+      const urlObj = new URL(normalizedUrl);
       if (urlObj.hostname.includes("youtube.com")) {
-        return urlObj.searchParams.get("v");
+        let videoId = urlObj.searchParams.get("v");
+        
+        // Also check for video ID in path for mobile URLs like /watch/v/VIDEO_ID
+        if (!videoId && urlObj.pathname.includes('/watch/')) {
+          const pathParts = urlObj.pathname.split('/');
+          const watchIndex = pathParts.indexOf('watch');
+          if (watchIndex >= 0 && pathParts[watchIndex + 1]) {
+            videoId = pathParts[watchIndex + 1];
+          }
+        }
+        
+        return videoId ? videoId.trim() : null;
       } else if (urlObj.hostname.includes("youtu.be")) {
         // Handle youtu.be URLs - extract video ID from pathname, removing any query params
         const pathname = urlObj.pathname.slice(1); // Remove leading slash
         // Split by '/' or '?' to get just the video ID (in case there are extra path segments or query params)
         const videoId = pathname.split('/')[0].split('?')[0];
-        return videoId || null;
+        return videoId ? videoId.trim() : null;
       }
       return null;
-    } catch {
+    } catch (error) {
+      console.log("[v0] Client-side extractVideoId error:", error);
       return null;
     }
   }
@@ -583,19 +607,23 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
       return "Please enter a YouTube URL";
     }
     try {
-      const urlObj = new URL(url);
+      // Normalize URL - handle URLs without protocol (common on mobile)
+      const normalizedUrl = normalizeUrl(url);
+      
+      const urlObj = new URL(normalizedUrl);
       if (
         !urlObj.hostname.includes("youtube.com") &&
         !urlObj.hostname.includes("youtu.be")
       ) {
         return "Please enter a valid YouTube URL";
       }
-      const videoId = extractVideoId(url);
+      const videoId = extractVideoId(normalizedUrl);
       if (!videoId) {
         return "Please enter a valid YouTube URL";
       }
       return null;
-    } catch {
+    } catch (error) {
+      console.log("[v0] Client-side URL validation error:", error);
       return "Please enter a valid YouTube URL";
     }
   };
@@ -702,7 +730,11 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                 onSubmit={(e) => {
                   e.preventDefault();
                   const formData = new FormData(e.currentTarget);
-                  const url = formData.get("url") as string;
+                  let url = formData.get("url") as string;
+
+                  // Normalize URL before validation and submission
+                  url = normalizeUrl(url);
+                  formData.set("url", url);
 
                   // Validate URL
                   const error = validateUrl(url);
@@ -796,7 +828,11 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
           onSubmit={(e) => {
             e.preventDefault();
             const formData = new FormData(e.currentTarget);
-            const url = formData.get("url") as string;
+            let url = formData.get("url") as string;
+
+            // Normalize URL before validation and submission
+            url = normalizeUrl(url);
+            formData.set("url", url);
 
             // Validate URL
             const error = validateUrl(url);
