@@ -267,7 +267,7 @@ async function fetchTranscriptCustom(videoId: string): Promise<TranscriptItem[]>
     }
   }
   
-  // Strategy 4: Try to find transcript URL patterns directly
+  // Strategy 4: Try to find transcript URL patterns directly in HTML
   if (!captionTracks || captionTracks.length === 0) {
     // Look for transcript API URLs in the HTML
     const transcriptUrlMatch = html.match(/https:\/\/www\.youtube\.com\/api\/timedtext[^"'\s]+/g)
@@ -287,6 +287,41 @@ async function fetchTranscriptCustom(videoId: string): Promise<TranscriptItem[]>
         }
       } catch (e) {
         console.log("[v0] Custom fetch: Failed to fetch transcript URL:", e instanceof Error ? e.message : String(e))
+      }
+    }
+  }
+  
+  // Strategy 5: Try constructing transcript URL directly (fallback for serverless)
+  // YouTube transcript URLs follow a pattern: /api/timedtext?v={videoId}&lang={lang}
+  if (!captionTracks || captionTracks.length === 0) {
+    console.log("[v0] Custom fetch: Attempting to construct transcript URL directly")
+    const commonLanguages = ['en', 'en-US', 'en-GB']
+    
+    for (const lang of commonLanguages) {
+      try {
+        // Try the standard YouTube transcript API endpoint
+        const transcriptUrl = `https://www.youtube.com/api/timedtext?v=${videoId}&lang=${lang}&fmt=srv3`
+        console.log("[v0] Custom fetch: Trying transcript URL:", transcriptUrl)
+        
+        const transcriptResponse = await fetch(transcriptUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+            'Accept': 'text/xml',
+            'Referer': `https://www.youtube.com/watch?v=${videoId}`,
+          }
+        })
+        
+        if (transcriptResponse.ok) {
+          const xmlText = await transcriptResponse.text()
+          // Check if we got valid XML (not an error page)
+          if (xmlText.includes('<transcript>') || xmlText.includes('<text')) {
+            console.log("[v0] Custom fetch: Successfully fetched transcript via direct URL construction")
+            return parseTranscriptXML(xmlText)
+          }
+        }
+      } catch (e) {
+        console.log("[v0] Custom fetch: Failed to fetch constructed URL for lang", lang, ":", e instanceof Error ? e.message : String(e))
+        continue
       }
     }
   }
