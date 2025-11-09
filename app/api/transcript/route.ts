@@ -50,10 +50,101 @@ export async function POST(request: NextRequest) {
 
     console.log('[Edge] Fetching transcript for video:', videoId)
 
-    // First, try to fetch the video page to extract caption track URLs
-    // This is more reliable than guessing the URL
+    // Strategy 1: Use YouTube's InnerTube API (official internal API)
+    // This is what the YouTube web client uses and is more reliable than HTML parsing
     try {
-      console.log('[Edge] Fetching video page to extract caption URLs')
+      console.log('[Edge] Trying InnerTube API')
+
+      // First, get the video page to extract API key and client info
+      const videoUrl = `https://www.youtube.com/watch?v=${videoId}`
+      const pageResponse = await fetch(videoUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+        }
+      })
+
+      if (pageResponse.ok) {
+        const html = await pageResponse.text()
+        console.log('[Edge] Video page fetched, length:', html.length)
+
+        // Extract API key and context from the page
+        const apiKeyMatch = html.match(/"INNERTUBE_API_KEY":"([^"]+)"/)
+        const clientNameMatch = html.match(/"INNERTUBE_CLIENT_NAME":"([^"]+)"/)
+        const clientVersionMatch = html.match(/"INNERTUBE_CLIENT_VERSION":"([^"]+)"/)
+
+        if (apiKeyMatch) {
+          const apiKey = apiKeyMatch[1]
+          console.log('[Edge] Found API key')
+
+          // Call the get_transcript endpoint
+          const innertubeResponse = await fetch(`https://www.youtube.com/youtubei/v1/get_transcript?key=${apiKey}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+              'X-YouTube-Client-Name': '1',
+              'X-YouTube-Client-Version': clientVersionMatch?.[1] || '2.20241108.01.00',
+            },
+            body: JSON.stringify({
+              context: {
+                client: {
+                  clientName: clientNameMatch?.[1] || 'WEB',
+                  clientVersion: clientVersionMatch?.[1] || '2.20241108.01.00',
+                }
+              },
+              params: videoId
+            })
+          })
+
+          if (innertubeResponse.ok) {
+            const data = await innertubeResponse.json()
+            console.log('[Edge] InnerTube response received')
+
+            // Extract transcript from response
+            const transcriptData = data?.actions?.[0]?.updateEngagementPanelAction?.content?.transcriptRenderer?.body?.transcriptBodyRenderer?.cueGroups
+
+            if (transcriptData && Array.isArray(transcriptData)) {
+              console.log('[Edge] Found transcript data in InnerTube response')
+
+              const items: TranscriptItem[] = []
+              for (const group of transcriptData) {
+                const cue = group?.transcriptCueGroupRenderer?.cues?.[0]?.transcriptCueRenderer
+                if (cue) {
+                  const startMs = parseInt(cue.startOffsetMs || '0')
+                  const durationMs = parseInt(cue.durationMs || '0')
+                  const text = cue.cue?.simpleText || ''
+
+                  if (text) {
+                    items.push({
+                      text: text.trim(),
+                      offset: startMs,
+                      duration: durationMs,
+                    })
+                  }
+                }
+              }
+
+              if (items.length > 0) {
+                console.log('[Edge] Success! Fetched', items.length, 'items via InnerTube API')
+                return NextResponse.json({ transcript: items })
+              }
+            }
+          } else {
+            console.log('[Edge] InnerTube API failed with status:', innertubeResponse.status)
+          }
+        } else {
+          console.log('[Edge] Could not find API key in page')
+        }
+      }
+    } catch (e) {
+      console.log('[Edge] InnerTube API failed:', e instanceof Error ? e.message : String(e))
+    }
+
+    // Strategy 2: Try to extract caption track URLs from ytInitialPlayerResponse
+    try {
+      console.log('[Edge] Trying to extract caption URLs from HTML')
       const videoUrl = `https://www.youtube.com/watch?v=${videoId}`
 
       const pageResponse = await fetch(videoUrl, {
@@ -61,16 +152,11 @@ export async function POST(request: NextRequest) {
           'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           'Accept-Language': 'en-US,en;q=0.9',
-          'Referer': 'https://www.youtube.com/',
-          'Sec-Fetch-Dest': 'document',
-          'Sec-Fetch-Mode': 'navigate',
-          'Sec-Fetch-Site': 'none',
         }
       })
 
       if (pageResponse.ok) {
         const html = await pageResponse.text()
-        console.log('[Edge] Video page fetched, length:', html.length)
 
         // Try to extract ytInitialPlayerResponse
         const playerResponseMarkers = [
@@ -169,7 +255,7 @@ export async function POST(request: NextRequest) {
         }
       }
     } catch (e) {
-      console.log('[Edge] Failed to fetch video page:', e instanceof Error ? e.message : String(e))
+      console.log('[Edge] Failed to extract caption URLs:', e instanceof Error ? e.message : String(e))
     }
 
     // Fallback: Try multiple language codes directly
