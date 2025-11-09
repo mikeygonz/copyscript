@@ -178,31 +178,52 @@ async function fetchTranscriptCustom(videoId: string): Promise<TranscriptItem[]>
   console.log("[v0] Custom fetch: Video page fetched, length:", html.length)
   
   // Extract the ytInitialPlayerResponse JSON which contains caption tracks
-  const ytInitialPlayerResponseMatch = html.match(/var ytInitialPlayerResponse = ({.+?});/)
-  if (!ytInitialPlayerResponseMatch) {
-    // Try alternative pattern
-    const ytInitialDataMatch = html.match(/"captionTracks":(\[.*?\])/)
-    if (!ytInitialDataMatch) {
-      throw new Error("Could not find caption tracks in video page")
+  // YouTube embeds this in a script tag, need to extract it properly
+  let playerResponse: any = null
+  let captionTracks: any[] | null = null
+  
+  // Try multiple patterns to find the player response
+  const patterns = [
+    /var ytInitialPlayerResponse = ({.+?});/s,
+    /"ytInitialPlayerResponse":({.+?}),"responseContext"/s,
+    /ytInitialPlayerResponse\s*=\s*({.+?});/s,
+  ]
+  
+  for (const pattern of patterns) {
+    const match = html.match(pattern)
+    if (match) {
+      try {
+        playerResponse = JSON.parse(match[1])
+        captionTracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks
+        if (captionTracks && captionTracks.length > 0) {
+          console.log("[v0] Custom fetch: Found", captionTracks.length, "caption tracks")
+          break
+        }
+      } catch (e) {
+        console.log("[v0] Custom fetch: Pattern matched but JSON parse failed:", e)
+        continue
+      }
     }
-    const captionTracks = JSON.parse(ytInitialDataMatch[1])
-    return await fetchTranscriptFromCaptionTracks(captionTracks)
   }
   
-  try {
-    const playerResponse = JSON.parse(ytInitialPlayerResponseMatch[1])
-    const captionTracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks
-    
-    if (!captionTracks || captionTracks.length === 0) {
-      throw new Error("No caption tracks found")
+  // If we didn't find it in player response, try direct caption tracks search
+  if (!captionTracks || captionTracks.length === 0) {
+    const captionTracksMatch = html.match(/"captionTracks":\s*(\[[\s\S]*?\])/)
+    if (captionTracksMatch) {
+      try {
+        captionTracks = JSON.parse(captionTracksMatch[1])
+        console.log("[v0] Custom fetch: Found caption tracks via direct match")
+      } catch (e) {
+        console.log("[v0] Custom fetch: Failed to parse caption tracks directly:", e)
+      }
     }
-    
-    console.log("[v0] Custom fetch: Found", captionTracks.length, "caption tracks")
-    return await fetchTranscriptFromCaptionTracks(captionTracks)
-  } catch (parseError) {
-    console.log("[v0] Custom fetch: Error parsing player response:", parseError)
-    throw new Error("Failed to parse video page data")
   }
+  
+  if (!captionTracks || captionTracks.length === 0) {
+    throw new Error("No caption tracks found in video page")
+  }
+  
+  return await fetchTranscriptFromCaptionTracks(captionTracks)
 }
 
 async function fetchTranscriptFromCaptionTracks(captionTracks: any[]): Promise<TranscriptItem[]> {
