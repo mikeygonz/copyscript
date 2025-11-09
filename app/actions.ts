@@ -1,6 +1,7 @@
 "use server"
 
 import { YoutubeTranscript } from "@danielxceron/youtube-transcript"
+import { YoutubeTranscript as YoutubeTranscriptAlt } from "youtube-transcript"
 
 type TranscriptItem = {
   text: string
@@ -119,306 +120,229 @@ async function getYoutubeVideoMetadata(videoId: string, transcriptItems?: Transc
 
 async function getYoutubeTranscript(videoId: string): Promise<TranscriptItem[]> {
   console.log("[v0] Fetching transcript for video:", videoId)
+  console.log("[v0] Environment:", process.env.NODE_ENV)
+  console.log("[v0] Vercel:", process.env.VERCEL ? "Yes" : "No")
 
-  // Retry function with exponential backoff
-  const retryWithBackoff = async (
-    fn: () => Promise<any>,
-    maxRetries: number = 3,
-    baseDelay: number = 1000
-  ): Promise<any> => {
-    let lastError: Error | null = null;
-    
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        return await fn();
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-        const errorMessage = lastError.message.toLowerCase();
-        
-        // Don't retry on certain errors
-        if (
-          errorMessage.includes('transcript disabled') ||
-          errorMessage.includes('transcript not available') ||
-          errorMessage.includes('private') ||
-          errorMessage.includes('restricted') ||
-          errorMessage.includes('video unavailable') ||
-          errorMessage.includes('video not found')
-        ) {
-          throw lastError;
-        }
-        
-        // If not the last attempt, wait before retrying
-        if (attempt < maxRetries - 1) {
-          const delay = baseDelay * Math.pow(2, attempt);
-          console.log(`[v0] Attempt ${attempt + 1} failed, retrying in ${delay}ms...`, errorMessage);
-          await new Promise(resolve => setTimeout(resolve, delay));
-        }
-      }
-    }
-    
-    throw lastError || new Error('Failed to fetch transcript after retries');
-  };
-
+  // Try primary library first
   try {
-    // Try multiple strategies with retry logic
-    let transcriptItems;
-    let lastError: Error | null = null;
+    console.log("[v0] Attempting with @danielxceron/youtube-transcript")
+    const transcriptItems = await YoutubeTranscript.fetchTranscript(videoId) as any[]
+    console.log("[v0] Successfully fetched", transcriptItems.length, "transcript items with primary library")
+    return processTranscriptItems(transcriptItems)
+  } catch (primaryError) {
+    console.log("[v0] Primary library failed:", primaryError instanceof Error ? primaryError.message : String(primaryError))
     
-    // Strategy 1: Try with English language
+    // Try alternative library as fallback
     try {
-      transcriptItems = await retryWithBackoff(
-        () => YoutubeTranscript.fetchTranscript(videoId, { lang: 'en' }),
-        3,
-        1000
-      );
-      console.log("[v0] Successfully fetched with lang=en");
-    } catch (error) {
-      console.log("[v0] Failed with lang=en:", error);
-      lastError = error instanceof Error ? error : new Error(String(error));
+      console.log("[v0] Attempting with youtube-transcript (alternative)")
+      const transcriptItems = await YoutubeTranscriptAlt.fetchTranscript(videoId) as any[]
+      console.log("[v0] Successfully fetched", transcriptItems.length, "transcript items with alternative library")
+      return processTranscriptItems(transcriptItems)
+    } catch (altError) {
+      console.log("[v0] Alternative library also failed:", altError instanceof Error ? altError.message : String(altError))
       
-      // Strategy 2: Try without language specification
+      // If both libraries fail, try custom fetch implementation
       try {
-        transcriptItems = await retryWithBackoff(
-          () => YoutubeTranscript.fetchTranscript(videoId),
-          3,
-          1000
-        );
-        console.log("[v0] Successfully fetched without language spec");
-      } catch (retryError) {
-        console.log("[v0] Failed without language spec:", retryError);
-        const retryErrorObj = retryError instanceof Error ? retryError : new Error(String(retryError));
-        
-        // Strategy 3: Try with 'en-US' as fallback
-        try {
-          transcriptItems = await retryWithBackoff(
-            () => YoutubeTranscript.fetchTranscript(videoId, { lang: 'en-US' }),
-            2,
-            1500
-          );
-          console.log("[v0] Successfully fetched with lang=en-US");
-        } catch (fallbackError) {
-          console.log("[v0] Failed with lang=en-US:", fallbackError);
-          // Throw the most descriptive error
-          throw retryErrorObj;
-        }
+        console.log("[v0] Attempting custom fetch implementation")
+        const transcriptItems = await fetchTranscriptCustom(videoId)
+        console.log("[v0] Successfully fetched", transcriptItems.length, "transcript items with custom implementation")
+        return transcriptItems
+      } catch (customError) {
+        console.log("[v0] All methods failed. Last error:", customError instanceof Error ? customError.message : String(customError))
+        throw primaryError // Throw the original error
       }
     }
-    console.log("[v0] Successfully fetched", transcriptItems.length, "transcript items")
-    console.log("[v0] First item sample:", JSON.stringify(transcriptItems[0], null, 2))
-    console.log("[v0] Sample offsets:", transcriptItems.slice(0, 5).map((item: any) => item.offset))
-    console.log("[v0] Sample items with missing offsets:", transcriptItems.slice(0, 10).map((item: any, idx: number) => ({
-      index: idx,
-      hasOffset: 'offset' in item,
-      hasStart: 'start' in item,
-      offset: item.offset,
-      start: item.start,
-      text: item.text?.substring(0, 30)
-    })))
-    
-    // Check for items with zero or missing offsets in the middle/end
-    const itemsWithZeroOffset = transcriptItems
-      .map((item: any, idx: number) => ({ 
-        index: idx, 
-        offset: item.offset, 
-        start: item.start,
-        hasOffset: 'offset' in item,
-        hasStart: 'start' in item
-      }))
-      .filter((item: any) => {
-        const offset = item.offset ?? item.start ?? 0
-        return offset === 0 || offset === null || offset === undefined
-      })
-    
-    if (itemsWithZeroOffset.length > 0) {
-      console.log("[v0] Found", itemsWithZeroOffset.length, "items with zero/missing offsets")
-      console.log("[v0] First few zero-offset items:", itemsWithZeroOffset.slice(0, 5))
-    }
-
-    // Decode HTML entities and return items with timestamps
-    // The library might use 'offset' or 'start' - check both
-    // Also track cumulative time for items missing timestamps
-    // Determine unit format from first item
-    const firstItem = transcriptItems[0] as any
-    const sampleOffset = firstItem?.offset ?? firstItem?.start ?? 0
-    const likelyMilliseconds = sampleOffset > 1000
-    
-    let lastEndTime = 0 // Track last item's end time in seconds
-    
-    return transcriptItems.map((item: any, index: number) => {
-      // Try offset first, then start, then calculate from previous item's end time
-      let offset: number = 0
-      let offsetInSeconds: number = 0
-      let hasExplicitOffset = false
-      
-      if (typeof item.offset === 'number' && !isNaN(item.offset)) {
-        // Use explicit offset if it exists (even if 0, but only if at start)
-        if (index === 0 || item.offset > 0) {
-          offset = item.offset
-          offsetInSeconds = likelyMilliseconds ? offset / 1000 : offset
-          hasExplicitOffset = true
-        }
-      } else if (typeof item.start === 'number' && !isNaN(item.start)) {
-        // Use explicit start if it exists
-        if (index === 0 || item.start > 0) {
-          offset = item.start
-          offsetInSeconds = likelyMilliseconds ? offset / 1000 : offset
-          hasExplicitOffset = true
-        }
-      }
-      
-      // If no explicit offset and we're past the first item, use last end time
-      if (!hasExplicitOffset && index > 0 && lastEndTime > 0) {
-        offsetInSeconds = lastEndTime
-        offset = likelyMilliseconds ? lastEndTime * 1000 : lastEndTime
-      } else if (!hasExplicitOffset && index === 0) {
-        // First item with no offset - use 0
-        offset = 0
-        offsetInSeconds = 0
-      }
-      
-      // Get duration and convert to seconds
-      const duration = typeof item.duration === 'number' && !isNaN(item.duration) && item.duration > 0 
-        ? item.duration 
-        : 0
-      const durationInSeconds = likelyMilliseconds ? duration / 1000 : duration
-      
-      // Calculate end time for next iteration
-      const currentEndTime = offsetInSeconds + durationInSeconds
-      // Use the maximum to handle cases where offsets might go backwards
-      lastEndTime = Math.max(lastEndTime, currentEndTime)
-      
-      // Log when we're using calculated offsets
-      if (index > 0 && !hasExplicitOffset && lastEndTime > 0) {
-        console.log(`[v0] Item ${index} missing offset, using calculated: ${offsetInSeconds.toFixed(2)}s (${Math.round(offset)}ms)`)
-      }
-      
-      return {
-        text: item.text
-      .replace(/&amp;#39;/g, "'")
-      .replace(/&amp;quot;/g, '"')
-      .replace(/&amp;amp;/g, "&")
-          .replace(/&amp;gt;/g, ">")
-          .replace(/&amp;lt;/g, "<")
-          .trim(),
-        offset: offset,
-        duration: duration,
-      }
-    })
-  } catch (error) {
-    console.log("[v0] ERROR fetching transcript:", error)
-    throw error
   }
+}
+
+async function fetchTranscriptCustom(videoId: string): Promise<TranscriptItem[]> {
+  // Custom implementation using fetch that Vercel will track
+  const videoUrl = `https://www.youtube.com/watch?v=${videoId}`
+  
+  // Fetch the video page to get transcript data
+  const response = await fetch(videoUrl, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+    }
+  })
+  
+  if (!response.ok) {
+    throw new Error(`Failed to fetch video page: ${response.status}`)
+  }
+  
+  const html = await response.text()
+  
+  // Try to extract transcript URL from the page
+  // YouTube stores transcript data in a specific format
+  const transcriptMatch = html.match(/"captionTracks":\[(.*?)\]/)
+  if (!transcriptMatch) {
+    throw new Error("Transcript not found in video page")
+  }
+  
+  // This is a simplified approach - the actual implementation would need to parse the JSON
+  // For now, throw an error to fall back to library methods
+  throw new Error("Custom fetch not fully implemented - using library fallback")
+}
+
+function processTranscriptItems(transcriptItems: any[]): TranscriptItem[] {
+  console.log("[v0] Processing", transcriptItems.length, "transcript items")
+  console.log("[v0] First item sample:", JSON.stringify(transcriptItems[0], null, 2))
+  console.log("[v0] Sample offsets:", transcriptItems.slice(0, 5).map((item: any) => item.offset))
+  console.log("[v0] Sample items with missing offsets:", transcriptItems.slice(0, 10).map((item: any, idx: number) => ({
+    index: idx,
+    hasOffset: 'offset' in item,
+    hasStart: 'start' in item,
+    offset: item.offset,
+    start: item.start,
+    text: item.text?.substring(0, 30)
+  })))
+  
+  // Check for items with zero or missing offsets in the middle/end
+  const itemsWithZeroOffset = transcriptItems
+    .map((item: any, idx: number) => ({ 
+      index: idx, 
+      offset: item.offset, 
+      start: item.start,
+      hasOffset: 'offset' in item,
+      hasStart: 'start' in item
+    }))
+    .filter((item: any) => {
+      const offset = item.offset ?? item.start ?? 0
+      return offset === 0 || offset === null || offset === undefined
+    })
+  
+  if (itemsWithZeroOffset.length > 0) {
+    console.log("[v0] Found", itemsWithZeroOffset.length, "items with zero/missing offsets")
+    console.log("[v0] First few zero-offset items:", itemsWithZeroOffset.slice(0, 5))
+  }
+
+  // Decode HTML entities and return items with timestamps
+  // The library might use 'offset' or 'start' - check both
+  // Also track cumulative time for items missing timestamps
+  // Determine unit format from first item
+  const firstItem = transcriptItems[0] as any
+  const sampleOffset = firstItem?.offset ?? firstItem?.start ?? 0
+  const likelyMilliseconds = sampleOffset > 1000
+  
+  let lastEndTime = 0 // Track last item's end time in seconds
+  
+  return transcriptItems.map((item: any, index: number) => {
+    // Try offset first, then start, then calculate from previous item's end time
+    let offset: number = 0
+    let offsetInSeconds: number = 0
+    let hasExplicitOffset = false
+    
+    if (typeof item.offset === 'number' && !isNaN(item.offset)) {
+      // Use explicit offset if it exists (even if 0, but only if at start)
+      if (index === 0 || item.offset > 0) {
+        offset = item.offset
+        offsetInSeconds = likelyMilliseconds ? offset / 1000 : offset
+        hasExplicitOffset = true
+      }
+    } else if (typeof item.start === 'number' && !isNaN(item.start)) {
+      // Use explicit start if it exists
+      if (index === 0 || item.start > 0) {
+        offset = item.start
+        offsetInSeconds = likelyMilliseconds ? offset / 1000 : offset
+        hasExplicitOffset = true
+      }
+    }
+    
+    // If no explicit offset and we're past the first item, use last end time
+    if (!hasExplicitOffset && index > 0 && lastEndTime > 0) {
+      offsetInSeconds = lastEndTime
+      offset = likelyMilliseconds ? lastEndTime * 1000 : lastEndTime
+    } else if (!hasExplicitOffset && index === 0) {
+      // First item with no offset - use 0
+      offset = 0
+      offsetInSeconds = 0
+    }
+    
+    // Get duration and convert to seconds
+    const duration = typeof item.duration === 'number' && !isNaN(item.duration) && item.duration > 0 
+      ? item.duration 
+      : 0
+    const durationInSeconds = likelyMilliseconds ? duration / 1000 : duration
+    
+    // Calculate end time for next iteration
+    const currentEndTime = offsetInSeconds + durationInSeconds
+    // Use the maximum to handle cases where offsets might go backwards
+    lastEndTime = Math.max(lastEndTime, currentEndTime)
+    
+    // Log when we're using calculated offsets
+    if (index > 0 && !hasExplicitOffset && lastEndTime > 0) {
+      console.log(`[v0] Item ${index} missing offset, using calculated: ${offsetInSeconds.toFixed(2)}s (${Math.round(offset)}ms)`)
+    }
+    
+    return {
+      text: item.text
+        .replace(/&amp;#39;/g, "'")
+        .replace(/&amp;quot;/g, '"')
+        .replace(/&amp;amp;/g, "&")
+        .replace(/&amp;gt;/g, ">")
+        .replace(/&amp;lt;/g, "<")
+        .trim(),
+      offset: offset,
+      duration: duration,
+    }
+  })
 }
 
 export async function getTranscript(_prevState: TranscriptState, formData: FormData): Promise<TranscriptState> {
   const url = formData.get("url") as string
   console.log("[v0] getTranscript called with URL:", url)
-  console.log("[v0] FormData entries:", Array.from(formData.entries()))
 
-  if (!url || url.trim() === "") {
-    console.log("[v0] No URL provided in form data")
+  if (!url) {
     return { error: "Please provide a YouTube URL" }
   }
 
   // Extract video ID from URL
   let videoId: string | null = null
   try {
-    // Normalize URL - handle mobile URLs and remove tracking parameters
-    let normalizedUrl = url.trim()
-    
-    // Handle URLs without protocol
-    if (!normalizedUrl.startsWith('http://') && !normalizedUrl.startsWith('https://')) {
-      normalizedUrl = 'https://' + normalizedUrl
-    }
-    
-    const urlObj = new URL(normalizedUrl)
-    
-    // Handle all YouTube domain variations (youtube.com, m.youtube.com, www.youtube.com, etc.)
+    const urlObj = new URL(url)
     if (urlObj.hostname.includes("youtube.com")) {
       videoId = urlObj.searchParams.get("v")
-      
-      // Also check for video ID in path for mobile URLs like /watch/v/VIDEO_ID
-      if (!videoId && urlObj.pathname.includes('/watch/')) {
-        const pathParts = urlObj.pathname.split('/')
-        const watchIndex = pathParts.indexOf('watch')
-        if (watchIndex >= 0 && pathParts[watchIndex + 1]) {
-          videoId = pathParts[watchIndex + 1]
-        }
-      }
     } else if (urlObj.hostname.includes("youtu.be")) {
-      // Handle youtu.be URLs - extract video ID from pathname, removing any query params
-      const pathname = urlObj.pathname.slice(1) // Remove leading slash
-      // Split by '/' or '?' to get just the video ID (in case there are extra path segments or query params)
-      videoId = pathname.split('/')[0].split('?')[0] || null
-    }
-
-    // Clean up video ID - remove any invalid characters
-    if (videoId) {
-      videoId = videoId.trim()
-      // YouTube video IDs are typically 11 characters alphanumeric
-      // But allow for edge cases and validate format
-      if (videoId.length === 0) {
-        videoId = null
-      }
+      videoId = urlObj.pathname.slice(1)
     }
 
     if (!videoId) {
-      console.log("[v0] Could not extract video ID from URL:", url)
-      return { error: "Invalid YouTube URL. Please make sure the URL contains a valid video ID." }
+      return { error: "Invalid YouTube URL" }
     }
-    console.log("[v0] Extracted video ID:", videoId, "from URL:", url)
-  } catch (error) {
-    console.log("[v0] Error parsing URL:", url, error)
-    return { error: `Invalid URL format: ${error instanceof Error ? error.message : "Unknown error"}` }
+    console.log("[v0] Extracted video ID:", videoId)
+  } catch {
+    return { error: "Invalid URL format" }
   }
 
   try {
-    // Add timeout to prevent hanging on slow mobile networks
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error("Request timeout: The request took too long. Please try again.")), 30000) // 30 second timeout
-    })
-    
-    const transcriptPromise = getYoutubeTranscript(videoId)
-    const transcript = await Promise.race([transcriptPromise, timeoutPromise])
-    
+    const transcript = await getYoutubeTranscript(videoId)
     const metadata = await getYoutubeVideoMetadata(videoId, transcript)
     console.log("[v0] SUCCESS: Transcript fetched, length:", transcript.length)
     return { transcript, metadata: metadata || undefined }
   } catch (error) {
     console.log("[v0] ERROR in getTranscript:", error)
+    console.log("[v0] Error details:", {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : undefined,
+    })
+    
     const errorMessage = error instanceof Error ? error.message : "Unknown error"
     
-    // Check for common error messages and provide helpful feedback
+    // Provide more helpful error messages
     let userFriendlyError = errorMessage
-    if (errorMessage.toLowerCase().includes("transcript disabled") || 
-        errorMessage.toLowerCase().includes("disabled for videos")) {
-      userFriendlyError = "This video's transcript is not available. Some videos have transcripts disabled by the creator."
-    } else if (errorMessage.toLowerCase().includes("could not retrieve")) {
-      userFriendlyError = "Unable to retrieve transcript. The video may not have captions available."
-    } else if (errorMessage.toLowerCase().includes("timeout") ||
-               errorMessage.toLowerCase().includes("took too long")) {
-      userFriendlyError = "The request timed out. This can happen on slow networks. Please try again."
-    } else if (errorMessage.toLowerCase().includes("network") ||
-               errorMessage.toLowerCase().includes("fetch") ||
-               errorMessage.toLowerCase().includes("connection")) {
-      userFriendlyError = "Network error. Please check your connection and try again."
-    }
-    
-    // Provide more specific error messages
-    let finalError = userFriendlyError
-    if (errorMessage.toLowerCase().includes("could not retrieve a transcript") || 
-        errorMessage.toLowerCase().includes("transcript not available")) {
-      finalError = "This video's transcript is not available. Some videos have transcripts disabled by the creator."
-    } else if (errorMessage.toLowerCase().includes("video unavailable") ||
-               errorMessage.toLowerCase().includes("video not found")) {
-      finalError = "This video is not available or has been removed."
-    } else if (errorMessage.toLowerCase().includes("private") ||
-               errorMessage.toLowerCase().includes("restricted")) {
-      finalError = "This video is private or restricted. Transcripts are only available for public videos."
+    if (errorMessage.includes("timeout")) {
+      userFriendlyError = "The request timed out. Please try again or check if the video has transcripts enabled."
+    } else if (errorMessage.includes("disabled") || errorMessage.includes("not available")) {
+      userFriendlyError = "Transcripts are not available for this video. The video may have transcripts disabled."
+    } else if (errorMessage.includes("404") || errorMessage.includes("not found")) {
+      userFriendlyError = "Video not found. Please check the URL and try again."
     }
     
     return {
-      error: `Unable to fetch transcript: ${finalError}`,
+      error: `Unable to fetch transcript: ${userFriendlyError}`,
     }
   }
 }
