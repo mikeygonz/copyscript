@@ -122,120 +122,148 @@ async function getYoutubeTranscript(videoId: string): Promise<TranscriptItem[]> 
   console.log("[v0] Environment:", process.env.NODE_ENV)
   console.log("[v0] Vercel:", process.env.VERCEL ? "Yes" : "No")
 
-  try {
-    // Add timeout wrapper for serverless environments
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error("Transcript fetch timeout after 50 seconds")), 50000)
-    })
-    
-    const transcriptPromise = YoutubeTranscript.fetchTranscript(videoId)
-    
-    const transcriptItems = await Promise.race([transcriptPromise, timeoutPromise]) as any[]
-    console.log("[v0] Successfully fetched", transcriptItems.length, "transcript items")
-    console.log("[v0] First item sample:", JSON.stringify(transcriptItems[0], null, 2))
-    console.log("[v0] Sample offsets:", transcriptItems.slice(0, 5).map((item: any) => item.offset))
-    console.log("[v0] Sample items with missing offsets:", transcriptItems.slice(0, 10).map((item: any, idx: number) => ({
-      index: idx,
-      hasOffset: 'offset' in item,
-      hasStart: 'start' in item,
-      offset: item.offset,
-      start: item.start,
-      text: item.text?.substring(0, 30)
-    })))
-    
-    // Check for items with zero or missing offsets in the middle/end
-    const itemsWithZeroOffset = transcriptItems
-      .map((item: any, idx: number) => ({ 
-        index: idx, 
-        offset: item.offset, 
-        start: item.start,
-        hasOffset: 'offset' in item,
-        hasStart: 'start' in item
-      }))
-      .filter((item: any) => {
-        const offset = item.offset ?? item.start ?? 0
-        return offset === 0 || offset === null || offset === undefined
-      })
-    
-    if (itemsWithZeroOffset.length > 0) {
-      console.log("[v0] Found", itemsWithZeroOffset.length, "items with zero/missing offsets")
-      console.log("[v0] First few zero-offset items:", itemsWithZeroOffset.slice(0, 5))
-    }
+  // Retry logic for serverless environments where YouTube might temporarily block requests
+  const maxRetries = 3
+  let lastError: Error | null = null
 
-    // Decode HTML entities and return items with timestamps
-    // The library might use 'offset' or 'start' - check both
-    // Also track cumulative time for items missing timestamps
-    // Determine unit format from first item
-    const firstItem = transcriptItems[0] as any
-    const sampleOffset = firstItem?.offset ?? firstItem?.start ?? 0
-    const likelyMilliseconds = sampleOffset > 1000
-    
-    let lastEndTime = 0 // Track last item's end time in seconds
-    
-    return transcriptItems.map((item: any, index: number) => {
-      // Try offset first, then start, then calculate from previous item's end time
-      let offset: number = 0
-      let offsetInSeconds: number = 0
-      let hasExplicitOffset = false
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[v0] Attempt ${attempt}/${maxRetries} to fetch transcript`)
       
-      if (typeof item.offset === 'number' && !isNaN(item.offset)) {
-        // Use explicit offset if it exists (even if 0, but only if at start)
-        if (index === 0 || item.offset > 0) {
-          offset = item.offset
-          offsetInSeconds = likelyMilliseconds ? offset / 1000 : offset
-          hasExplicitOffset = true
+      // Add timeout wrapper for serverless environments
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("Transcript fetch timeout after 50 seconds")), 50000)
+      })
+      
+      const transcriptPromise = YoutubeTranscript.fetchTranscript(videoId)
+      
+      const transcriptItems = await Promise.race([transcriptPromise, timeoutPromise]) as any[]
+      console.log("[v0] Successfully fetched", transcriptItems.length, "transcript items")
+      console.log("[v0] First item sample:", JSON.stringify(transcriptItems[0], null, 2))
+      console.log("[v0] Sample offsets:", transcriptItems.slice(0, 5).map((item: any) => item.offset))
+      console.log("[v0] Sample items with missing offsets:", transcriptItems.slice(0, 10).map((item: any, idx: number) => ({
+        index: idx,
+        hasOffset: 'offset' in item,
+        hasStart: 'start' in item,
+        offset: item.offset,
+        start: item.start,
+        text: item.text?.substring(0, 30)
+      })))
+      
+      // Check for items with zero or missing offsets in the middle/end
+      const itemsWithZeroOffset = transcriptItems
+        .map((item: any, idx: number) => ({ 
+          index: idx, 
+          offset: item.offset, 
+          start: item.start,
+          hasOffset: 'offset' in item,
+          hasStart: 'start' in item
+        }))
+        .filter((item: any) => {
+          const offset = item.offset ?? item.start ?? 0
+          return offset === 0 || offset === null || offset === undefined
+        })
+      
+      if (itemsWithZeroOffset.length > 0) {
+        console.log("[v0] Found", itemsWithZeroOffset.length, "items with zero/missing offsets")
+        console.log("[v0] First few zero-offset items:", itemsWithZeroOffset.slice(0, 5))
+      }
+
+      // Decode HTML entities and return items with timestamps
+      // The library might use 'offset' or 'start' - check both
+      // Also track cumulative time for items missing timestamps
+      // Determine unit format from first item
+      const firstItem = transcriptItems[0] as any
+      const sampleOffset = firstItem?.offset ?? firstItem?.start ?? 0
+      const likelyMilliseconds = sampleOffset > 1000
+      
+      let lastEndTime = 0 // Track last item's end time in seconds
+      
+      return transcriptItems.map((item: any, index: number) => {
+        // Try offset first, then start, then calculate from previous item's end time
+        let offset: number = 0
+        let offsetInSeconds: number = 0
+        let hasExplicitOffset = false
+        
+        if (typeof item.offset === 'number' && !isNaN(item.offset)) {
+          // Use explicit offset if it exists (even if 0, but only if at start)
+          if (index === 0 || item.offset > 0) {
+            offset = item.offset
+            offsetInSeconds = likelyMilliseconds ? offset / 1000 : offset
+            hasExplicitOffset = true
+          }
+        } else if (typeof item.start === 'number' && !isNaN(item.start)) {
+          // Use explicit start if it exists
+          if (index === 0 || item.start > 0) {
+            offset = item.start
+            offsetInSeconds = likelyMilliseconds ? offset / 1000 : offset
+            hasExplicitOffset = true
+          }
         }
-      } else if (typeof item.start === 'number' && !isNaN(item.start)) {
-        // Use explicit start if it exists
-        if (index === 0 || item.start > 0) {
-          offset = item.start
-          offsetInSeconds = likelyMilliseconds ? offset / 1000 : offset
-          hasExplicitOffset = true
+        
+        // If no explicit offset and we're past the first item, use last end time
+        if (!hasExplicitOffset && index > 0 && lastEndTime > 0) {
+          offsetInSeconds = lastEndTime
+          offset = likelyMilliseconds ? lastEndTime * 1000 : lastEndTime
+        } else if (!hasExplicitOffset && index === 0) {
+          // First item with no offset - use 0
+          offset = 0
+          offsetInSeconds = 0
         }
+        
+        // Get duration and convert to seconds
+        const duration = typeof item.duration === 'number' && !isNaN(item.duration) && item.duration > 0 
+          ? item.duration 
+          : 0
+        const durationInSeconds = likelyMilliseconds ? duration / 1000 : duration
+        
+        // Calculate end time for next iteration
+        const currentEndTime = offsetInSeconds + durationInSeconds
+        // Use the maximum to handle cases where offsets might go backwards
+        lastEndTime = Math.max(lastEndTime, currentEndTime)
+        
+        // Log when we're using calculated offsets
+        if (index > 0 && !hasExplicitOffset && lastEndTime > 0) {
+          console.log(`[v0] Item ${index} missing offset, using calculated: ${offsetInSeconds.toFixed(2)}s (${Math.round(offset)}ms)`)
+        }
+        
+        return {
+          text: item.text
+        .replace(/&amp;#39;/g, "'")
+        .replace(/&amp;quot;/g, '"')
+        .replace(/&amp;amp;/g, "&")
+            .replace(/&amp;gt;/g, ">")
+            .replace(/&amp;lt;/g, "<")
+            .trim(),
+          offset: offset,
+          duration: duration,
+        }
+      })
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error))
+      const errorMessage = lastError.message || String(error)
+      console.log(`[v0] Attempt ${attempt} failed:`, errorMessage)
+      
+      // If it's a "disabled" error and we're in production, it might be YouTube blocking
+      // Try retrying with a delay
+      if (attempt < maxRetries) {
+        const delayMs = attempt * 1000 // Exponential backoff: 1s, 2s, 3s
+        console.log(`[v0] Retrying in ${delayMs}ms...`)
+        await new Promise(resolve => setTimeout(resolve, delayMs))
+        continue
       }
       
-      // If no explicit offset and we're past the first item, use last end time
-      if (!hasExplicitOffset && index > 0 && lastEndTime > 0) {
-        offsetInSeconds = lastEndTime
-        offset = likelyMilliseconds ? lastEndTime * 1000 : lastEndTime
-      } else if (!hasExplicitOffset && index === 0) {
-        // First item with no offset - use 0
-        offset = 0
-        offsetInSeconds = 0
+      // If all retries failed, check if it's a blocking issue vs actually disabled
+      if (process.env.VERCEL && errorMessage.includes("disabled")) {
+        throw new Error("YouTube may be blocking requests from serverless functions. This video might work if accessed from a different network.")
       }
       
-      // Get duration and convert to seconds
-      const duration = typeof item.duration === 'number' && !isNaN(item.duration) && item.duration > 0 
-        ? item.duration 
-        : 0
-      const durationInSeconds = likelyMilliseconds ? duration / 1000 : duration
-      
-      // Calculate end time for next iteration
-      const currentEndTime = offsetInSeconds + durationInSeconds
-      // Use the maximum to handle cases where offsets might go backwards
-      lastEndTime = Math.max(lastEndTime, currentEndTime)
-      
-      // Log when we're using calculated offsets
-      if (index > 0 && !hasExplicitOffset && lastEndTime > 0) {
-        console.log(`[v0] Item ${index} missing offset, using calculated: ${offsetInSeconds.toFixed(2)}s (${Math.round(offset)}ms)`)
-      }
-      
-      return {
-        text: item.text
-      .replace(/&amp;#39;/g, "'")
-      .replace(/&amp;quot;/g, '"')
-      .replace(/&amp;amp;/g, "&")
-          .replace(/&amp;gt;/g, ">")
-          .replace(/&amp;lt;/g, "<")
-          .trim(),
-        offset: offset,
-        duration: duration,
-      }
-    })
-  } catch (error) {
-    console.log("[v0] ERROR fetching transcript:", error)
-    throw error
+      throw lastError
+    }
   }
+  
+  // This should never be reached, but TypeScript needs it
+  throw lastError || new Error("Failed to fetch transcript after all retries")
 }
 
 export async function getTranscript(_prevState: TranscriptState, formData: FormData): Promise<TranscriptState> {
