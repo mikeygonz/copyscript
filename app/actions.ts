@@ -123,9 +123,23 @@ async function getYoutubeTranscript(videoId: string): Promise<TranscriptItem[]> 
   console.log("[v0] Environment:", process.env.NODE_ENV)
   console.log("[v0] Vercel:", process.env.VERCEL ? "Yes" : "No")
 
-  // Try primary library first
+  // In production/Vercel, skip libraries and use custom fetch directly
+  // Libraries don't work in serverless environments
+  if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+    console.log("[v0] Production detected - using custom fetch implementation")
+    try {
+      const transcriptItems = await fetchTranscriptCustom(videoId)
+      console.log("[v0] Successfully fetched", transcriptItems.length, "transcript items with custom implementation")
+      return transcriptItems
+    } catch (customError) {
+      console.log("[v0] Custom fetch failed:", customError instanceof Error ? customError.message : String(customError))
+      throw customError
+    }
+  }
+
+  // In development, try libraries first, then fallback to custom fetch
   try {
-    console.log("[v0] Attempting with @danielxceron/youtube-transcript")
+    console.log("[v0] Development mode - attempting with @danielxceron/youtube-transcript")
     const transcriptItems = await YoutubeTranscript.fetchTranscript(videoId) as any[]
     console.log("[v0] Successfully fetched", transcriptItems.length, "transcript items with primary library")
     return processTranscriptItems(transcriptItems)
@@ -141,16 +155,11 @@ async function getYoutubeTranscript(videoId: string): Promise<TranscriptItem[]> 
     } catch (altError) {
       console.log("[v0] Alternative library also failed:", altError instanceof Error ? altError.message : String(altError))
       
-      // If both libraries fail, try custom fetch implementation
-      try {
-        console.log("[v0] Attempting custom fetch implementation")
-        const transcriptItems = await fetchTranscriptCustom(videoId)
-        console.log("[v0] Successfully fetched", transcriptItems.length, "transcript items with custom implementation")
-        return transcriptItems
-      } catch (customError) {
-        console.log("[v0] All methods failed. Last error:", customError instanceof Error ? customError.message : String(customError))
-        throw primaryError // Throw the original error
-      }
+      // Fallback to custom fetch
+      console.log("[v0] Attempting custom fetch implementation")
+      const transcriptItems = await fetchTranscriptCustom(videoId)
+      console.log("[v0] Successfully fetched", transcriptItems.length, "transcript items with custom implementation")
+      return transcriptItems
     }
   }
 }
