@@ -129,7 +129,10 @@ async function getYoutubeTranscript(videoId: string): Promise<TranscriptItem[]> 
     console.log("[v0] Production detected - using Edge Function API")
     try {
       // Call our Edge Function API endpoint
-      const baseUrl = process.env.VERCEL_URL 
+      // Use the request host instead of VERCEL_URL to avoid auth issues
+      const baseUrl = process.env.NEXT_PUBLIC_VERCEL_URL 
+        ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
+        : process.env.VERCEL_URL
         ? `https://${process.env.VERCEL_URL}`
         : 'http://localhost:3000'
       
@@ -231,30 +234,42 @@ async function fetchTranscriptCustom(videoId: string): Promise<TranscriptItem[]>
   let captionTracks: any[] | null = null
   
   // Strategy 1: Look for ytInitialPlayerResponse in various formats
+  // Use more specific patterns with longer match limits
   const playerResponsePatterns = [
-    /var ytInitialPlayerResponse\s*=\s*({.+?});/s,
-    /"ytInitialPlayerResponse"\s*:\s*({.+?}),"responseContext"/s,
-    /ytInitialPlayerResponse\s*=\s*({.+?});/s,
-    /window\["ytInitialPlayerResponse"\]\s*=\s*({.+?});/s,
+    /var ytInitialPlayerResponse\s*=\s*({[\s\S]{1,500000}?});(?:\s*<\/script>|\s*var )/,
+    /ytInitialPlayerResponse\s*=\s*({[\s\S]{1,500000}?});(?:\s*<\/script>|\s*var )/,
+    /"ytInitialPlayerResponse"\s*:\s*({[\s\S]{1,500000}?})(?:,"responseContext"|<\/script>)/,
   ]
   
-  for (const pattern of playerResponsePatterns) {
+  for (let i = 0; i < playerResponsePatterns.length; i++) {
+    const pattern = playerResponsePatterns[i]
+    console.log(`[v0] Custom fetch: Trying pattern ${i + 1}`)
     const match = html.match(pattern)
     if (match) {
+      console.log(`[v0] Custom fetch: Pattern ${i + 1} matched, JSON length:`, match[1].length)
       try {
         const playerResponse = JSON.parse(match[1])
+        console.log("[v0] Custom fetch: Successfully parsed player response JSON")
         captionTracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks ||
                        playerResponse?.captions?.playerCaptionsRenderer?.captionTracks ||
                        playerResponse?.captions?.captionTracks
+        
+        console.log("[v0] Custom fetch: Caption tracks from player response:", captionTracks ? `Found ${captionTracks.length}` : 'null')
         
         if (captionTracks && Array.isArray(captionTracks) && captionTracks.length > 0) {
           console.log("[v0] Custom fetch: Found", captionTracks.length, "caption tracks via player response")
           break
         }
       } catch (e) {
-        console.log("[v0] Custom fetch: Pattern matched but JSON parse failed:", e instanceof Error ? e.message : String(e))
+        console.log("[v0] Custom fetch: Pattern", i + 1, "matched but JSON parse failed:", e instanceof Error ? e.message : String(e))
+        // Log where the JSON parsing failed
+        if (e instanceof SyntaxError) {
+          console.log("[v0] Custom fetch: JSON sample that failed:", match[1].substring(0, 1000))
+        }
         continue
       }
+    } else {
+      console.log(`[v0] Custom fetch: Pattern ${i + 1} did not match`)
     }
   }
   
