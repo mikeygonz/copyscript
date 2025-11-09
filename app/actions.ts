@@ -288,31 +288,6 @@ function processTranscriptItems(transcriptItems: any[]): TranscriptItem[] {
       duration: duration,
     }
   })
-} catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error))
-      const errorMessage = lastError.message || String(error)
-      console.log(`[v0] Attempt ${attempt} failed:`, errorMessage)
-      
-      // If it's a "disabled" error and we're in production, it might be YouTube blocking
-      // Try retrying with a delay
-      if (attempt < maxRetries) {
-        const delayMs = attempt * 1000 // Exponential backoff: 1s, 2s, 3s
-        console.log(`[v0] Retrying in ${delayMs}ms...`)
-        await new Promise(resolve => setTimeout(resolve, delayMs))
-        continue
-      }
-      
-      // If all retries failed, check if it's a blocking issue vs actually disabled
-      if (process.env.VERCEL && errorMessage.includes("disabled")) {
-        throw new Error("YouTube may be blocking requests from serverless functions. This video might work if accessed from a different network.")
-      }
-      
-      throw lastError
-    }
-  }
-  
-  // This should never be reached, but TypeScript needs it
-  throw lastError || new Error("Failed to fetch transcript after all retries")
 }
 
 export async function getTranscript(_prevState: TranscriptState, formData: FormData): Promise<TranscriptState> {
