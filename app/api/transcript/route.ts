@@ -78,61 +78,75 @@ export async function POST(request: NextRequest) {
           const apiKey = apiKeyMatch[1]
           console.log('[Edge] Found API key')
 
-          // Call the get_transcript endpoint
-          const innertubeResponse = await fetch(`https://www.youtube.com/youtubei/v1/get_transcript?key=${apiKey}`, {
+          // Use the player API to get video details including captions
+          const playerResponse = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${apiKey}`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
               'X-YouTube-Client-Name': '1',
               'X-YouTube-Client-Version': clientVersionMatch?.[1] || '2.20241108.01.00',
+              'Origin': 'https://www.youtube.com',
+              'Referer': `https://www.youtube.com/watch?v=${videoId}`,
             },
             body: JSON.stringify({
               context: {
                 client: {
-                  clientName: clientNameMatch?.[1] || 'WEB',
+                  clientName: 'WEB',
                   clientVersion: clientVersionMatch?.[1] || '2.20241108.01.00',
+                  hl: 'en',
+                  gl: 'US',
                 }
               },
-              params: videoId
+              videoId: videoId
             })
           })
 
-          if (innertubeResponse.ok) {
-            const data = await innertubeResponse.json()
-            console.log('[Edge] InnerTube response received')
+          if (playerResponse.ok) {
+            const data = await playerResponse.json()
+            console.log('[Edge] InnerTube player response received')
+            console.log('[Edge] Response keys:', Object.keys(data))
 
-            // Extract transcript from response
-            const transcriptData = data?.actions?.[0]?.updateEngagementPanelAction?.content?.transcriptRenderer?.body?.transcriptBodyRenderer?.cueGroups
+            // Extract caption tracks from player response
+            const captionTracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks ||
+                                 data?.captions?.playerCaptionsRenderer?.captionTracks
 
-            if (transcriptData && Array.isArray(transcriptData)) {
-              console.log('[Edge] Found transcript data in InnerTube response')
+            if (captionTracks && Array.isArray(captionTracks) && captionTracks.length > 0) {
+              console.log('[Edge] Found', captionTracks.length, 'caption tracks via InnerTube')
 
-              const items: TranscriptItem[] = []
-              for (const group of transcriptData) {
-                const cue = group?.transcriptCueGroupRenderer?.cues?.[0]?.transcriptCueRenderer
-                if (cue) {
-                  const startMs = parseInt(cue.startOffsetMs || '0')
-                  const durationMs = parseInt(cue.durationMs || '0')
-                  const text = cue.cue?.simpleText || ''
+              // Find English track or use first available
+              const track = captionTracks.find((t: any) => t.languageCode === 'en') || captionTracks[0]
 
-                  if (text) {
-                    items.push({
-                      text: text.trim(),
-                      offset: startMs,
-                      duration: durationMs,
-                    })
+              if (track?.baseUrl) {
+                console.log('[Edge] Fetching transcript from InnerTube caption URL')
+                const transcriptResponse = await fetch(track.baseUrl, {
+                  headers: {
+                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+                  }
+                })
+
+                if (transcriptResponse.ok) {
+                  const xmlText = await transcriptResponse.text()
+                  const items = parseTranscriptXML(xmlText)
+
+                  if (items.length > 0) {
+                    console.log('[Edge] Success! Fetched', items.length, 'items via InnerTube API')
+                    return NextResponse.json({ transcript: items })
                   }
                 }
               }
-
-              if (items.length > 0) {
-                console.log('[Edge] Success! Fetched', items.length, 'items via InnerTube API')
-                return NextResponse.json({ transcript: items })
+            } else {
+              console.log('[Edge] No caption tracks in InnerTube player response')
+              if (data.captions) {
+                console.log('[Edge] Captions object exists, keys:', Object.keys(data.captions))
+              } else {
+                console.log('[Edge] No captions object in response')
               }
             }
           } else {
-            console.log('[Edge] InnerTube API failed with status:', innertubeResponse.status)
+            const errorText = await playerResponse.text()
+            console.log('[Edge] InnerTube player API failed with status:', playerResponse.status)
+            console.log('[Edge] Error response:', errorText.substring(0, 500))
           }
         } else {
           console.log('[Edge] Could not find API key in page')
