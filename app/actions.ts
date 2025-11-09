@@ -156,11 +156,13 @@ async function getYoutubeTranscript(videoId: string): Promise<TranscriptItem[]> 
 }
 
 async function fetchTranscriptCustom(videoId: string): Promise<TranscriptItem[]> {
+  console.log("[v0] Custom fetch: Fetching video page for", videoId)
+  
   // Custom implementation using fetch that Vercel will track
   const videoUrl = `https://www.youtube.com/watch?v=${videoId}`
   
   // Fetch the video page to get transcript data
-  const response = await fetch(videoUrl, {
+  const pageResponse = await fetch(videoUrl, {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -168,22 +170,96 @@ async function fetchTranscriptCustom(videoId: string): Promise<TranscriptItem[]>
     }
   })
   
-  if (!response.ok) {
-    throw new Error(`Failed to fetch video page: ${response.status}`)
+  if (!pageResponse.ok) {
+    throw new Error(`Failed to fetch video page: ${pageResponse.status}`)
   }
   
-  const html = await response.text()
+  const html = await pageResponse.text()
+  console.log("[v0] Custom fetch: Video page fetched, length:", html.length)
   
-  // Try to extract transcript URL from the page
-  // YouTube stores transcript data in a specific format
-  const transcriptMatch = html.match(/"captionTracks":\[(.*?)\]/)
-  if (!transcriptMatch) {
-    throw new Error("Transcript not found in video page")
+  // Extract the ytInitialPlayerResponse JSON which contains caption tracks
+  const ytInitialPlayerResponseMatch = html.match(/var ytInitialPlayerResponse = ({.+?});/)
+  if (!ytInitialPlayerResponseMatch) {
+    // Try alternative pattern
+    const ytInitialDataMatch = html.match(/"captionTracks":(\[.*?\])/)
+    if (!ytInitialDataMatch) {
+      throw new Error("Could not find caption tracks in video page")
+    }
+    const captionTracks = JSON.parse(ytInitialDataMatch[1])
+    return await fetchTranscriptFromCaptionTracks(captionTracks)
   }
   
-  // This is a simplified approach - the actual implementation would need to parse the JSON
-  // For now, throw an error to fall back to library methods
-  throw new Error("Custom fetch not fully implemented - using library fallback")
+  try {
+    const playerResponse = JSON.parse(ytInitialPlayerResponseMatch[1])
+    const captionTracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks
+    
+    if (!captionTracks || captionTracks.length === 0) {
+      throw new Error("No caption tracks found")
+    }
+    
+    console.log("[v0] Custom fetch: Found", captionTracks.length, "caption tracks")
+    return await fetchTranscriptFromCaptionTracks(captionTracks)
+  } catch (parseError) {
+    console.log("[v0] Custom fetch: Error parsing player response:", parseError)
+    throw new Error("Failed to parse video page data")
+  }
+}
+
+async function fetchTranscriptFromCaptionTracks(captionTracks: any[]): Promise<TranscriptItem[]> {
+  // Find English transcript first, or use the first available
+  const track = captionTracks.find((t: any) => t.languageCode === 'en') || captionTracks[0]
+  
+  if (!track || !track.baseUrl) {
+    throw new Error("No transcript URL found")
+  }
+  
+  console.log("[v0] Custom fetch: Fetching transcript from URL:", track.baseUrl.substring(0, 100) + "...")
+  
+  // Fetch the transcript XML
+  const transcriptResponse = await fetch(track.baseUrl, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    }
+  })
+  
+  if (!transcriptResponse.ok) {
+    throw new Error(`Failed to fetch transcript XML: ${transcriptResponse.status}`)
+  }
+  
+  const xmlText = await transcriptResponse.text()
+  console.log("[v0] Custom fetch: Transcript XML fetched, length:", xmlText.length)
+  
+  // Parse the XML transcript
+  return parseTranscriptXML(xmlText)
+}
+
+function parseTranscriptXML(xmlText: string): TranscriptItem[] {
+  // Parse XML transcript format
+  // Format: <transcript><text start="0.0" dur="5.5">Hello world</text>...</transcript>
+  const textMatches = xmlText.matchAll(/<text start="([\d.]+)" dur="([\d.]+)">(.*?)<\/text>/g)
+  
+  const items: TranscriptItem[] = []
+  
+  for (const match of textMatches) {
+    const start = parseFloat(match[1])
+    const duration = parseFloat(match[2])
+    const text = match[3]
+      .replace(/&amp;#39;/g, "'")
+      .replace(/&amp;quot;/g, '"')
+      .replace(/&amp;amp;/g, "&")
+      .replace(/&amp;gt;/g, ">")
+      .replace(/&amp;lt;/g, "<")
+      .trim()
+    
+    items.push({
+      text,
+      offset: start * 1000, // Convert to milliseconds
+      duration: duration * 1000, // Convert to milliseconds
+    })
+  }
+  
+  console.log("[v0] Custom fetch: Parsed", items.length, "transcript items")
+  return items
 }
 
 function processTranscriptItems(transcriptItems: any[]): TranscriptItem[] {
