@@ -123,17 +123,47 @@ async function getYoutubeTranscript(videoId: string): Promise<TranscriptItem[]> 
   console.log("[v0] Environment:", process.env.NODE_ENV)
   console.log("[v0] Vercel:", process.env.VERCEL ? "Yes" : "No")
 
-  // In production/Vercel, skip libraries and use custom fetch directly
-  // Libraries don't work in serverless environments
+  // In production/Vercel, use Edge Function API to bypass serverless blocking
+  // Edge Functions run at the edge with different IPs and may not be blocked by YouTube
   if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
-    console.log("[v0] Production detected - using custom fetch implementation")
+    console.log("[v0] Production detected - using Edge Function API")
     try {
-      const transcriptItems = await fetchTranscriptCustom(videoId)
-      console.log("[v0] Successfully fetched", transcriptItems.length, "transcript items with custom implementation")
-      return transcriptItems
-    } catch (customError) {
-      console.log("[v0] Custom fetch failed:", customError instanceof Error ? customError.message : String(customError))
-      throw customError
+      // Call our Edge Function API endpoint
+      const baseUrl = process.env.VERCEL_URL 
+        ? `https://${process.env.VERCEL_URL}`
+        : 'http://localhost:3000'
+      
+      console.log("[v0] Calling Edge Function at:", baseUrl + '/api/transcript')
+      
+      const response = await fetch(`${baseUrl}/api/transcript`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ videoId }),
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `Edge Function returned ${response.status}`)
+      }
+      
+      const data = await response.json()
+      console.log("[v0] Successfully fetched", data.transcript.length, "transcript items via Edge Function")
+      return data.transcript
+    } catch (edgeError) {
+      console.log("[v0] Edge Function failed:", edgeError instanceof Error ? edgeError.message : String(edgeError))
+      
+      // Fallback to custom fetch as last resort
+      console.log("[v0] Falling back to direct custom fetch")
+      try {
+        const transcriptItems = await fetchTranscriptCustom(videoId)
+        console.log("[v0] Successfully fetched", transcriptItems.length, "transcript items with custom implementation")
+        return transcriptItems
+      } catch (customError) {
+        console.log("[v0] Custom fetch also failed:", customError instanceof Error ? customError.message : String(customError))
+        throw edgeError // Throw the Edge Function error
+      }
     }
   }
 
