@@ -1,30 +1,30 @@
-# YouTube transcript tool
+# YouTube Transcript Tool
 
-*Automatically synced with your [v0.app](https://v0.app) deployments*
+A simple web application for fetching and copying YouTube video transcripts.
 
-[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/mikes-lab/v0-you-tube-transcript-tool)
-[![Built with v0](https://img.shields.io/badge/Built%20with-v0.app-black?style=for-the-badge)](https://v0.app/chat/qyhBJ8loO9l)
+## Features
 
-## Overview
+- Fetch transcripts from YouTube videos
+- Copy transcripts with or without timestamps
+- View recent searches
+- Keyboard accessible
 
-This repository will stay in sync with your deployed chats on [v0.app](https://v0.app).
-Any changes you make to your deployed app will be automatically pushed to this repository from [v0.app](https://v0.app).
+## Installation
 
-## Deployment
+```bash
+pnpm install
+```
 
-Your project is live at:
+## Development
 
-**[https://vercel.com/mikes-lab/v0-you-tube-transcript-tool](https://vercel.com/mikes-lab/v0-you-tube-transcript-tool)**
+```bash
+pnpm dev
+```
 
-## Build your app
+## Credits
 
-Continue building your app on:
+YouTube transcript functionality powered by [@danielxceron/youtube-transcript](https://github.com/danielxceron/youtube-transcript).
 
-**[https://v0.app/chat/qyhBJ8loO9l](https://v0.app/chat/qyhBJ8loO9l)**
+## License
 
-## How It Works
-
-1. Create and modify your project using [v0.app](https://v0.app)
-2. Deploy your chats from the v0 interface
-3. Changes are automatically pushed to this repository
-4. Vercel deploys the latest version from this repository
+MIT
