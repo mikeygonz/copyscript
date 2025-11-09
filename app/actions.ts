@@ -186,50 +186,110 @@ async function fetchTranscriptCustom(videoId: string): Promise<TranscriptItem[]>
   const html = await pageResponse.text()
   console.log("[v0] Custom fetch: Video page fetched, length:", html.length)
   
-  // Extract the ytInitialPlayerResponse JSON which contains caption tracks
-  // YouTube embeds this in a script tag, need to extract it properly
-  let playerResponse: any = null
+  // Try to find caption tracks using multiple strategies
   let captionTracks: any[] | null = null
   
-  // Try multiple patterns to find the player response
-  const patterns = [
-    /var ytInitialPlayerResponse = ({.+?});/s,
-    /"ytInitialPlayerResponse":({.+?}),"responseContext"/s,
+  // Strategy 1: Look for ytInitialPlayerResponse in various formats
+  const playerResponsePatterns = [
+    /var ytInitialPlayerResponse\s*=\s*({.+?});/s,
+    /"ytInitialPlayerResponse"\s*:\s*({.+?}),"responseContext"/s,
     /ytInitialPlayerResponse\s*=\s*({.+?});/s,
+    /window\["ytInitialPlayerResponse"\]\s*=\s*({.+?});/s,
   ]
   
-  for (const pattern of patterns) {
+  for (const pattern of playerResponsePatterns) {
     const match = html.match(pattern)
     if (match) {
       try {
-        playerResponse = JSON.parse(match[1])
-        captionTracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks
-        if (captionTracks && captionTracks.length > 0) {
-          console.log("[v0] Custom fetch: Found", captionTracks.length, "caption tracks")
+        const playerResponse = JSON.parse(match[1])
+        captionTracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks ||
+                       playerResponse?.captions?.playerCaptionsRenderer?.captionTracks ||
+                       playerResponse?.captions?.captionTracks
+        
+        if (captionTracks && Array.isArray(captionTracks) && captionTracks.length > 0) {
+          console.log("[v0] Custom fetch: Found", captionTracks.length, "caption tracks via player response")
           break
         }
       } catch (e) {
-        console.log("[v0] Custom fetch: Pattern matched but JSON parse failed:", e)
+        console.log("[v0] Custom fetch: Pattern matched but JSON parse failed:", e instanceof Error ? e.message : String(e))
         continue
       }
     }
   }
   
-  // If we didn't find it in player response, try direct caption tracks search
+  // Strategy 2: Look for captionTracks directly in the HTML
   if (!captionTracks || captionTracks.length === 0) {
-    const captionTracksMatch = html.match(/"captionTracks":\s*(\[[\s\S]*?\])/)
-    if (captionTracksMatch) {
+    const captionPatterns = [
+      /"captionTracks"\s*:\s*(\[[\s\S]{0,50000}\])/,
+      /captionTracks["\s]*:[\s]*(\[[\s\S]{0,50000}\])/,
+    ]
+    
+    for (const pattern of captionPatterns) {
+      const match = html.match(pattern)
+      if (match) {
+        try {
+          captionTracks = JSON.parse(match[1])
+          if (Array.isArray(captionTracks) && captionTracks.length > 0) {
+            console.log("[v0] Custom fetch: Found caption tracks via direct match")
+            break
+          }
+        } catch (e) {
+          console.log("[v0] Custom fetch: Failed to parse caption tracks directly:", e instanceof Error ? e.message : String(e))
+          continue
+        }
+      }
+    }
+  }
+  
+  // Strategy 3: Look for ytInitialData which might contain captions
+  if (!captionTracks || captionTracks.length === 0) {
+    const ytInitialDataMatch = html.match(/var ytInitialData\s*=\s*({.+?});/s)
+    if (ytInitialDataMatch) {
       try {
-        captionTracks = JSON.parse(captionTracksMatch[1])
-        console.log("[v0] Custom fetch: Found caption tracks via direct match")
+        const initialData = JSON.parse(ytInitialDataMatch[1])
+        // Navigate through possible paths
+        captionTracks = initialData?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.[0]?.videoPrimaryInfoRenderer?.videoActions?.menuRenderer?.topLevelButtons?.[0]?.toggleButtonRenderer?.defaultServiceEndpoint?.signalServiceEndpoint?.actions?.[0]?.openPopupAction?.popup?.transcriptRenderer?.captionTracks ||
+                       initialData?.playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks
+        if (captionTracks && Array.isArray(captionTracks) && captionTracks.length > 0) {
+          console.log("[v0] Custom fetch: Found caption tracks via ytInitialData")
+        }
       } catch (e) {
-        console.log("[v0] Custom fetch: Failed to parse caption tracks directly:", e)
+        console.log("[v0] Custom fetch: Failed to parse ytInitialData:", e instanceof Error ? e.message : String(e))
+      }
+    }
+  }
+  
+  // Strategy 4: Try to find transcript URL patterns directly
+  if (!captionTracks || captionTracks.length === 0) {
+    // Look for transcript API URLs in the HTML
+    const transcriptUrlMatch = html.match(/https:\/\/www\.youtube\.com\/api\/timedtext[^"'\s]+/g)
+    if (transcriptUrlMatch && transcriptUrlMatch.length > 0) {
+      console.log("[v0] Custom fetch: Found transcript URL pattern, attempting direct fetch")
+      // Try to fetch the first transcript URL found
+      try {
+        const transcriptUrl = transcriptUrlMatch[0].replace(/\\u0026/g, '&')
+        const transcriptResponse = await fetch(transcriptUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          }
+        })
+        if (transcriptResponse.ok) {
+          const xmlText = await transcriptResponse.text()
+          return parseTranscriptXML(xmlText)
+        }
+      } catch (e) {
+        console.log("[v0] Custom fetch: Failed to fetch transcript URL:", e instanceof Error ? e.message : String(e))
       }
     }
   }
   
   if (!captionTracks || captionTracks.length === 0) {
-    throw new Error("No caption tracks found in video page")
+    // Log a sample of the HTML to help debug
+    const sampleHtml = html.substring(0, 2000)
+    console.log("[v0] Custom fetch: HTML sample (first 2000 chars):", sampleHtml)
+    console.log("[v0] Custom fetch: Searching for 'caption' in HTML:", html.includes('caption'))
+    console.log("[v0] Custom fetch: Searching for 'transcript' in HTML:", html.includes('transcript'))
+    throw new Error("No caption tracks found in video page. The video may not have transcripts available.")
   }
   
   return await fetchTranscriptFromCaptionTracks(captionTracks)
