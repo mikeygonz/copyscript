@@ -144,11 +144,14 @@ async function getYoutubeTranscript(videoId: string): Promise<TranscriptItem[]> 
       })
       
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || `Edge Function returned ${response.status}`)
+        const responseText = await response.text()
+        console.log("[v0] Edge Function failed with status:", response.status)
+        console.log("[v0] Edge Function response:", responseText.substring(0, 500))
+        throw new Error(`Edge Function returned ${response.status}: ${responseText.substring(0, 200)}`)
       }
       
-      const data = await response.json()
+      const responseText = await response.text()
+      const data = JSON.parse(responseText)
       console.log("[v0] Successfully fetched", data.transcript.length, "transcript items via Edge Function")
       return data.transcript
     } catch (edgeError) {
