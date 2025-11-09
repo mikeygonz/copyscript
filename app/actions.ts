@@ -119,9 +119,18 @@ async function getYoutubeVideoMetadata(videoId: string, transcriptItems?: Transc
 
 async function getYoutubeTranscript(videoId: string): Promise<TranscriptItem[]> {
   console.log("[v0] Fetching transcript for video:", videoId)
+  console.log("[v0] Environment:", process.env.NODE_ENV)
+  console.log("[v0] Vercel:", process.env.VERCEL ? "Yes" : "No")
 
   try {
-    const transcriptItems = await YoutubeTranscript.fetchTranscript(videoId)
+    // Add timeout wrapper for serverless environments
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("Transcript fetch timeout after 50 seconds")), 50000)
+    })
+    
+    const transcriptPromise = YoutubeTranscript.fetchTranscript(videoId)
+    
+    const transcriptItems = await Promise.race([transcriptPromise, timeoutPromise]) as any[]
     console.log("[v0] Successfully fetched", transcriptItems.length, "transcript items")
     console.log("[v0] First item sample:", JSON.stringify(transcriptItems[0], null, 2))
     console.log("[v0] Sample offsets:", transcriptItems.slice(0, 5).map((item: any) => item.offset))
@@ -262,9 +271,26 @@ export async function getTranscript(_prevState: TranscriptState, formData: FormD
     return { transcript, metadata: metadata || undefined }
   } catch (error) {
     console.log("[v0] ERROR in getTranscript:", error)
+    console.log("[v0] Error details:", {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : undefined,
+    })
+    
     const errorMessage = error instanceof Error ? error.message : "Unknown error"
+    
+    // Provide more helpful error messages
+    let userFriendlyError = errorMessage
+    if (errorMessage.includes("timeout")) {
+      userFriendlyError = "The request timed out. Please try again or check if the video has transcripts enabled."
+    } else if (errorMessage.includes("disabled") || errorMessage.includes("not available")) {
+      userFriendlyError = "Transcripts are not available for this video. The video may have transcripts disabled."
+    } else if (errorMessage.includes("404") || errorMessage.includes("not found")) {
+      userFriendlyError = "Video not found. Please check the URL and try again."
+    }
+    
     return {
-      error: `Unable to fetch transcript: ${errorMessage}`,
+      error: `Unable to fetch transcript: ${userFriendlyError}`,
     }
   }
 }

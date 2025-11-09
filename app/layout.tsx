@@ -7,6 +7,9 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Inter } from "next/font/google";
 import { JetBrains_Mono } from "next/font/google";
 
+// Configure Server Actions timeout (max 60s on Pro, 10s on Hobby)
+export const maxDuration = 60
+
 // Initialize fonts
 const inter = Inter({
   subsets: ["latin"],
