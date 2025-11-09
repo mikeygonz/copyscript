@@ -2,6 +2,7 @@
 
 import { YoutubeTranscript } from "@danielxceron/youtube-transcript"
 import { YoutubeTranscript as YoutubeTranscriptAlt } from "youtube-transcript"
+import { headers } from "next/headers"
 
 type TranscriptItem = {
   text: string
@@ -129,16 +130,32 @@ async function getYoutubeTranscript(videoId: string): Promise<TranscriptItem[]> 
     console.log("[v0] Production detected - using Edge Function API")
     try {
       // Call our Edge Function API endpoint
-      // Use the request host instead of VERCEL_URL to avoid auth issues
-      const baseUrl = process.env.NEXT_PUBLIC_VERCEL_URL 
-        ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
-        : process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : 'http://localhost:3000'
+      // Use request headers to get the actual hostname to avoid auth issues with preview deployment URLs
+      // This ensures we call the same deployment the user is accessing, not a preview URL
+      let apiUrl: string
+      if (process.env.NODE_ENV === 'development') {
+        apiUrl = 'http://localhost:3000/api/transcript'
+      } else {
+        // In production, try to get the host from headers to use the actual domain
+        try {
+          const headersList = headers()
+          const host = headersList.get('host')
+          const protocol = headersList.get('x-forwarded-proto') || 'https'
+          if (host) {
+            apiUrl = `${protocol}://${host}/api/transcript`
+          } else {
+            // Fallback to relative URL (Next.js will resolve internally)
+            apiUrl = '/api/transcript'
+          }
+        } catch {
+          // If headers() fails, use relative URL
+          apiUrl = '/api/transcript'
+        }
+      }
       
-      console.log("[v0] Calling Edge Function at:", baseUrl + '/api/transcript')
+      console.log("[v0] Calling Edge Function at:", apiUrl)
       
-      const response = await fetch(`${baseUrl}/api/transcript`, {
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
