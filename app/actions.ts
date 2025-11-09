@@ -248,12 +248,14 @@ async function fetchTranscriptCustom(videoId: string): Promise<TranscriptItem[]>
       const jsonStart = startIndex + marker.length
       
       // Extract JSON by counting braces
+      // Look for the semicolon after the JSON object, or end of script tag
       let braceCount = 0
       let jsonEnd = jsonStart
       let inString = false
       let escapeNext = false
+      let foundSemicolon = false
       
-      for (let i = jsonStart; i < html.length && i < jsonStart + 1000000; i++) {
+      for (let i = jsonStart; i < html.length && i < jsonStart + 2000000; i++) {
         const char = html[i]
         
         if (escapeNext) {
@@ -273,10 +275,28 @@ async function fetchTranscriptCustom(videoId: string): Promise<TranscriptItem[]>
         
         if (!inString) {
           if (char === '{') braceCount++
-          if (char === '}') braceCount--
-          
-          if (braceCount === 0 && i > jsonStart) {
-            jsonEnd = i + 1
+          if (char === '}') {
+            braceCount--
+            // When braces balance, look for semicolon or script tag
+            if (braceCount === 0 && i > jsonStart) {
+              // Check next few characters for semicolon or script tag
+              const nextChars = html.substring(i + 1, i + 20)
+              if (nextChars.match(/^\s*[;<]/)) {
+                jsonEnd = i + 1
+                foundSemicolon = true
+                break
+              }
+            }
+          }
+        }
+      }
+      
+      // If we didn't find a proper end, try to find semicolon after balanced braces
+      if (!foundSemicolon && braceCount === 0) {
+        const searchEnd = Math.min(jsonStart + 2000000, html.length)
+        for (let i = jsonEnd; i < searchEnd; i++) {
+          if (html[i] === ';' || html.substring(i, i + 8) === '</script>') {
+            jsonEnd = i
             break
           }
         }
@@ -289,10 +309,23 @@ async function fetchTranscriptCustom(videoId: string): Promise<TranscriptItem[]>
         try {
           const playerResponse = JSON.parse(jsonStr)
           console.log("[v0] Custom fetch: Successfully parsed ytInitialPlayerResponse")
+          console.log("[v0] Custom fetch: JSON keys:", Object.keys(playerResponse).slice(0, 20))
           
+          // Try multiple paths for caption tracks
           captionTracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks ||
                          playerResponse?.captions?.playerCaptionsRenderer?.captionTracks ||
-                         playerResponse?.captions?.captionTracks
+                         playerResponse?.captions?.captionTracks ||
+                         playerResponse?.playerCaptionsTracklistRenderer?.captionTracks
+          
+          // Log the structure to debug
+          if (!captionTracks) {
+            console.log("[v0] Custom fetch: Checking captions structure...")
+            console.log("[v0] Custom fetch: playerResponse.captions exists:", !!playerResponse?.captions)
+            if (playerResponse?.captions) {
+              console.log("[v0] Custom fetch: captions keys:", Object.keys(playerResponse.captions))
+            }
+            console.log("[v0] Custom fetch: playerResponse keys sample:", JSON.stringify(Object.keys(playerResponse).slice(0, 30)))
+          }
           
           console.log("[v0] Custom fetch: Caption tracks:", captionTracks ? `Found ${captionTracks.length}` : 'null')
           
