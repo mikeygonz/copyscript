@@ -729,12 +729,12 @@ export async function getTranscript(_prevState: TranscriptState, formData: FormD
     let userFriendlyError = errorMessage
     if (errorMessage.includes("timeout")) {
       userFriendlyError = "The request timed out. Please try again or check if the video has transcripts enabled."
-    } else if (errorMessage.includes("disabled") || errorMessage.includes("not available")) {
-      userFriendlyError = "Transcripts are not available for this video. The video may have transcripts disabled."
+    } else if (errorMessage.includes("disabled") || errorMessage.includes("not available") || errorMessage.includes("YouTube may be serving different content")) {
+      userFriendlyError = "YouTube is blocking requests from this server. To fix this, either: (1) Run locally with 'npm run dev', or (2) Deploy the proxy server (see proxy-server/DEPLOY.md in the repo)."
     } else if (errorMessage.includes("404") || errorMessage.includes("not found")) {
       userFriendlyError = "Video not found. Please check the URL and try again."
     }
-    
+
     return {
       error: `Unable to fetch transcript: ${userFriendlyError}`,
     }
