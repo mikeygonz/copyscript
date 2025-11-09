@@ -78,29 +78,58 @@ export async function POST(request: NextRequest) {
           const apiKey = apiKeyMatch[1]
           console.log('[Edge] Found API key')
 
-          // Use the player API to get video details including captions
-          const playerResponse = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${apiKey}`, {
+          // Try ANDROID client first - less likely to be blocked
+          console.log('[Edge] Trying with ANDROID client')
+          let playerResponse = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${apiKey}`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-              'X-YouTube-Client-Name': '1',
-              'X-YouTube-Client-Version': clientVersionMatch?.[1] || '2.20241108.01.00',
-              'Origin': 'https://www.youtube.com',
-              'Referer': `https://www.youtube.com/watch?v=${videoId}`,
+              'User-Agent': 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip',
+              'X-YouTube-Client-Name': '3',
+              'X-YouTube-Client-Version': '19.09.37',
             },
             body: JSON.stringify({
               context: {
                 client: {
-                  clientName: 'WEB',
-                  clientVersion: clientVersionMatch?.[1] || '2.20241108.01.00',
+                  clientName: 'ANDROID',
+                  clientVersion: '19.09.37',
+                  androidSdkVersion: 30,
                   hl: 'en',
                   gl: 'US',
                 }
               },
-              videoId: videoId
+              videoId: videoId,
+              params: 'CgIQBg==', // Enable captions
             })
           })
+
+          // If Android fails, try TVHTML5_SIMPLY_EMBEDDED_PLAYER which bypasses some restrictions
+          if (!playerResponse.ok) {
+            console.log('[Edge] Android client failed, trying TV embedded client')
+            playerResponse = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${apiKey}`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (PlayStation 4 5.55) AppleWebKit/601.2 (KHTML, like Gecko)',
+                'X-YouTube-Client-Name': '85',
+                'X-YouTube-Client-Version': '2.0',
+              },
+              body: JSON.stringify({
+                context: {
+                  client: {
+                    clientName: 'TVHTML5_SIMPLY_EMBEDDED_PLAYER',
+                    clientVersion: '2.0',
+                    hl: 'en',
+                    gl: 'US',
+                  },
+                  thirdParty: {
+                    embedUrl: 'https://www.youtube.com/',
+                  }
+                },
+                videoId: videoId,
+              })
+            })
+          }
 
           if (playerResponse.ok) {
             const data = await playerResponse.json()
