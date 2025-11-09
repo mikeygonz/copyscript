@@ -139,7 +139,7 @@ async function getYoutubeTranscript(videoId: string): Promise<TranscriptItem[]> 
         // In production, try to get the host from headers to use the actual domain
         // Node.js fetch requires absolute URLs, so we must construct a full URL
         try {
-          const headersList = headers()
+          const headersList = await headers()
           const host = headersList.get('host')
           const protocol = headersList.get('x-forwarded-proto') || 'https'
           console.log("[v0] Headers - host:", host, "protocol:", protocol)
