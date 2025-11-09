@@ -171,11 +171,19 @@ async function fetchTranscriptCustom(videoId: string): Promise<TranscriptItem[]>
   const videoUrl = `https://www.youtube.com/watch?v=${videoId}`
   
   // Fetch the video page to get transcript data
+  // Use more realistic browser headers to avoid YouTube blocking serverless requests
   const pageResponse = await fetch(videoUrl, {
     headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
       'Accept-Language': 'en-US,en;q=0.9',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Referer': 'https://www.youtube.com/',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'none',
+      'Sec-Fetch-User': '?1',
+      'Upgrade-Insecure-Requests': '1',
     }
   })
   
@@ -284,11 +292,26 @@ async function fetchTranscriptCustom(videoId: string): Promise<TranscriptItem[]>
   }
   
   if (!captionTracks || captionTracks.length === 0) {
-    // Log a sample of the HTML to help debug
-    const sampleHtml = html.substring(0, 2000)
-    console.log("[v0] Custom fetch: HTML sample (first 2000 chars):", sampleHtml)
-    console.log("[v0] Custom fetch: Searching for 'caption' in HTML:", html.includes('caption'))
-    console.log("[v0] Custom fetch: Searching for 'transcript' in HTML:", html.includes('transcript'))
+    // Log detailed debugging info for production issues
+    const sampleHtml = html.substring(0, 3000)
+    console.log("[v0] Custom fetch: HTML length:", html.length)
+    console.log("[v0] Custom fetch: HTML sample (first 3000 chars):", sampleHtml)
+    console.log("[v0] Custom fetch: Contains 'caption':", html.includes('caption'))
+    console.log("[v0] Custom fetch: Contains 'transcript':", html.includes('transcript'))
+    console.log("[v0] Custom fetch: Contains 'ytInitialPlayerResponse':", html.includes('ytInitialPlayerResponse'))
+    console.log("[v0] Custom fetch: Contains 'ytInitialData':", html.includes('ytInitialData'))
+    console.log("[v0] Custom fetch: Contains 'timedtext':", html.includes('timedtext'))
+    
+    // Check if YouTube is serving a different page (like age restriction or error page)
+    if (html.includes('Sign in to confirm your age') || html.includes('This video is unavailable')) {
+      throw new Error("YouTube is serving a restricted page. The video may require sign-in or be unavailable.")
+    }
+    
+    // If we're in production and it works locally, YouTube might be blocking serverless
+    if (process.env.VERCEL) {
+      throw new Error("No caption tracks found in video page. YouTube may be serving different content to serverless functions. This video works locally but fails in production.")
+    }
+    
     throw new Error("No caption tracks found in video page. The video may not have transcripts available.")
   }
   
