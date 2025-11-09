@@ -137,19 +137,55 @@ async function getYoutubeTranscript(videoId: string): Promise<TranscriptItem[]> 
         apiUrl = 'http://localhost:3000/api/transcript'
       } else {
         // In production, try to get the host from headers to use the actual domain
+        // Node.js fetch requires absolute URLs, so we must construct a full URL
         try {
           const headersList = headers()
           const host = headersList.get('host')
           const protocol = headersList.get('x-forwarded-proto') || 'https'
+          console.log("[v0] Headers - host:", host, "protocol:", protocol)
+          
           if (host) {
             apiUrl = `${protocol}://${host}/api/transcript`
+            console.log("[v0] Using host from headers:", apiUrl)
           } else {
-            // Fallback to relative URL (Next.js will resolve internally)
-            apiUrl = '/api/transcript'
+            // Fallback: try NEXT_PUBLIC_VERCEL_URL first (might be production domain)
+            // Then try VERCEL_PROJECT_PRODUCTION_URL
+            // Finally check VERCEL_URL but only if it's not a preview deployment
+            const nextPublicUrl = process.env.NEXT_PUBLIC_VERCEL_URL
+            const productionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
+            const vercelUrl = process.env.VERCEL_URL
+            
+            console.log("[v0] Env vars - NEXT_PUBLIC_VERCEL_URL:", nextPublicUrl, "VERCEL_PROJECT_PRODUCTION_URL:", productionUrl, "VERCEL_URL:", vercelUrl)
+            
+            // Check if VERCEL_URL is a preview deployment (contains 'git-' or has specific patterns)
+            const isPreviewDeployment = vercelUrl && (
+              vercelUrl.includes('git-') || 
+              vercelUrl.match(/^[a-z0-9-]+-[a-z0-9]+\.vercel\.app$/) === null
+            )
+            
+            let fallbackUrl: string | null = null
+            if (nextPublicUrl && !nextPublicUrl.includes('git-')) {
+              fallbackUrl = `https://${nextPublicUrl}`
+            } else if (productionUrl) {
+              fallbackUrl = productionUrl.startsWith('http') ? productionUrl : `https://${productionUrl}`
+            } else if (vercelUrl && !isPreviewDeployment) {
+              fallbackUrl = `https://${vercelUrl}`
+            }
+            
+            if (fallbackUrl) {
+              apiUrl = `${fallbackUrl}/api/transcript`
+              console.log("[v0] Using fallback URL:", apiUrl)
+            } else {
+              // Last resort: skip Edge Function and use custom fetch directly
+              console.log("[v0] No valid URL found, skipping Edge Function")
+              throw new Error('Unable to determine API URL, skipping Edge Function')
+            }
           }
-        } catch {
-          // If headers() fails, use relative URL
-          apiUrl = '/api/transcript'
+        } catch (error) {
+          // If headers() fails or we can't construct URL, skip Edge Function
+          // and fall through to custom fetch implementation
+          console.log("[v0] Error constructing API URL:", error instanceof Error ? error.message : String(error))
+          throw new Error('Unable to determine API URL, skipping Edge Function')
         }
       }
       
