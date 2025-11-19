@@ -1,5 +1,7 @@
 const express = require('express');
 const cors = require('cors');
+const { YoutubeTranscript } = require('@danielxceron/youtube-transcript');
+const { YoutubeTranscript: YoutubeTranscriptAlt } = require('youtube-transcript');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -24,6 +26,48 @@ app.use(cors({
 }));
 
 app.use(express.json());
+
+// Transcript endpoint using libraries (bypasses YouTube blocking by running from Fly.io)
+app.post('/get-transcript', async (req, res) => {
+  try {
+    const { videoId } = req.body;
+    if (!videoId) {
+      return res.status(400).json({ error: 'videoId is required' });
+    }
+
+    console.log('[Proxy] Fetching transcript via library for video:', videoId);
+
+    let transcriptItems = null;
+    let lastErrorMessage = null;
+
+    try {
+      transcriptItems = await YoutubeTranscript.fetchTranscript(videoId);
+      console.log('[Proxy] Primary transcript library succeeded');
+    } catch (primaryError) {
+      lastErrorMessage = primaryError?.message || String(primaryError);
+      console.log('[Proxy] Primary library failed:', lastErrorMessage);
+      try {
+        transcriptItems = await YoutubeTranscriptAlt.fetchTranscript(videoId);
+        console.log('[Proxy] Alternative transcript library succeeded');
+      } catch (altError) {
+        lastErrorMessage = altError?.message || String(altError);
+        console.log('[Proxy] Alternative library also failed:', lastErrorMessage);
+      }
+    }
+
+    if (!transcriptItems || transcriptItems.length === 0) {
+      return res.status(404).json({
+        error: 'No transcripts available for this video',
+        details: lastErrorMessage,
+      });
+    }
+
+    res.json({ transcript: transcriptItems });
+  } catch (error) {
+    console.error('[Proxy] Transcript library endpoint error:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -52,6 +96,9 @@ app.post('/fetch-youtube', async (req, res) => {
         'Sec-Fetch-Dest': 'document',
         'Sec-Fetch-Mode': 'navigate',
         'Sec-Fetch-Site': 'none',
+        'Cookie': 'PREF=f1=50000000&hl=en&tz=UTC; CONSENT=YES+1',
+        'X-YouTube-Client-Name': '1',
+        'X-YouTube-Client-Version': '2.20251118.01.00',
       }
     });
 
@@ -117,6 +164,72 @@ app.post('/fetch-transcript', async (req, res) => {
     console.error('[Proxy] Error:', error);
     res.status(500).json({
       error: error.message || 'Internal server error'
+    });
+  }
+});
+
+// Proxy endpoint for youtubei player API (fallback to fetch captions metadata)
+app.post('/fetch-player', async (req, res) => {
+  try {
+    const { videoId, apiKey, clientName, clientVersion } = req.body;
+
+    if (!videoId || !apiKey) {
+      return res.status(400).json({ error: 'videoId and apiKey are required' });
+    }
+
+    const payload = {
+      context: {
+        client: {
+          clientName: clientName || 'WEB',
+          clientVersion: clientVersion || '2.20240222.09.00',
+          hl: 'en',
+          gl: 'US',
+          utcOffsetMinutes: 0,
+        },
+      },
+      videoId,
+      racyCheckOk: true,
+      contentCheckOk: true,
+    };
+    if (req.body.visitorData) {
+      payload.context.client.visitorData = req.body.visitorData;
+    }
+
+    console.log('[Proxy] Fetching youtubei player API for video:', videoId);
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'User-Agent':
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      Origin: 'https://www.youtube.com',
+      Referer: `https://www.youtube.com/watch?v=${videoId}`,
+    };
+
+    if (req.body.visitorData) {
+      headers['X-Goog-Visitor-Id'] = req.body.visitorData;
+    }
+
+    const response = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${apiKey}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.log('[Proxy] youtubei player API returned status:', response.status, errorText);
+      return res.status(response.status).json({
+        error: `youtubei player API returned ${response.status}`,
+        details: errorText,
+      });
+    }
+
+    const json = await response.json();
+    res.json(json);
+  } catch (error) {
+    console.error('[Proxy] youtubei player API error:', error);
+    res.status(500).json({
+      error: error.message || 'Internal server error',
     });
   }
 });

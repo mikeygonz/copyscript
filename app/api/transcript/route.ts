@@ -9,6 +9,25 @@ type TranscriptItem = {
   duration: number
 }
 
+type InnertubeConfig = {
+  apiKey: string
+  clientName: string
+  clientVersion: string
+}
+
+function decodeTranscriptText(text: string): string {
+  return text
+    .replace(/&amp;#39;/g, "'")
+    .replace(/&amp;quot;/g, '"')
+    .replace(/&amp;amp;/g, '&')
+    .replace(/&amp;gt;/g, '>')
+    .replace(/&amp;lt;/g, '<')
+    .replace(/&apos;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .trim()
+}
+
 function parseTranscriptXML(xmlText: string): TranscriptItem[] {
   // Parse XML transcript format
   // Format: <transcript><text start="0.0" dur="5.5">Hello world</text>...</transcript>
@@ -19,16 +38,7 @@ function parseTranscriptXML(xmlText: string): TranscriptItem[] {
   for (const match of textMatches) {
     const start = parseFloat(match[1])
     const duration = parseFloat(match[2])
-    const text = match[3]
-      .replace(/&amp;#39;/g, "'")
-      .replace(/&amp;quot;/g, '"')
-      .replace(/&amp;amp;/g, "&")
-      .replace(/&amp;gt;/g, ">")
-      .replace(/&amp;lt;/g, "<")
-      .replace(/&apos;/g, "'")
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .trim()
+    const text = decodeTranscriptText(match[3])
 
     items.push({
       text,
@@ -116,6 +126,137 @@ function extractCaptionTracksFromHTML(html: string): any[] | null {
   return null
 }
 
+function extractInnertubeConfig(html: string): InnertubeConfig | null {
+  const apiKeyMatch = html.match(/"INNERTUBE_API_KEY":"([^"]+)"/)
+  const clientNameMatch = html.match(/"INNERTUBE_CLIENT_NAME":"([^"]+)"/)
+  const clientVersionMatch = html.match(/"INNERTUBE_CLIENT_VERSION":"([^"]+)"/)
+
+  if (apiKeyMatch && clientNameMatch && clientVersionMatch) {
+    return {
+      apiKey: apiKeyMatch[1],
+      clientName: clientNameMatch[1],
+      clientVersion: clientVersionMatch[1],
+    }
+  }
+
+  return null
+}
+
+async function fetchCaptionTracksFromPlayerApi(
+  proxyUrl: string,
+  videoId: string,
+  config: InnertubeConfig
+): Promise<any[] | null> {
+  const clientAttempts: InnertubeConfig[] = [
+    config,
+    {
+      apiKey: config.apiKey,
+      clientName: 'ANDROID',
+      clientVersion: '19.08.35',
+    },
+  ]
+
+  for (const attempt of clientAttempts) {
+    try {
+      const response = await fetch(`${proxyUrl}/fetch-player`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          videoId,
+          apiKey: attempt.apiKey,
+          clientName: attempt.clientName,
+          clientVersion: attempt.clientVersion,
+        }),
+        signal: AbortSignal.timeout(15000),
+      })
+
+      if (!response.ok) {
+        const text = await response.text()
+        console.log(
+          '[Edge] Player API proxy failed:',
+          attempt.clientName,
+          response.status,
+          text.substring(0, 200)
+        )
+        continue
+      }
+
+      const data = await response.json()
+      const playerResponse = data?.playerResponse || data
+      const captionTracks =
+        playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks ||
+        playerResponse?.captions?.playerCaptionsRenderer?.captionTracks
+
+      if (captionTracks && Array.isArray(captionTracks) && captionTracks.length > 0) {
+        console.log(
+          '[Edge] Found caption tracks via YouTube player API fallback (client:',
+          attempt.clientName,
+          ')'
+        )
+        return captionTracks
+      }
+    } catch (error) {
+      console.log(
+        '[Edge] Failed to fetch captions via player API (client',
+        attempt.clientName,
+        '):',
+        error instanceof Error ? error.message : String(error)
+      )
+    }
+  }
+
+  return null
+}
+
+async function fetchTranscriptViaProxyLibrary(
+  proxyUrl: string,
+  videoId: string
+): Promise<TranscriptItem[] | null> {
+  try {
+    const response = await fetch(`${proxyUrl}/get-transcript`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ videoId }),
+      signal: AbortSignal.timeout(15000),
+    })
+
+    if (!response.ok) {
+      const text = await response.text()
+      console.log('[Edge] Proxy transcript endpoint failed:', response.status, text.substring(0, 200))
+      return null
+    }
+
+    const data = await response.json()
+    if (Array.isArray(data?.transcript) && data.transcript.length > 0) {
+      console.log('[Edge] Transcript fetched via proxy transcript endpoint')
+      return data.transcript
+        .map((item: any) => ({
+          text: decodeTranscriptText(typeof item.text === 'string' ? item.text : ''),
+          offset:
+            typeof item.offset === 'number'
+              ? Math.round(item.offset * 1000)
+              : 0,
+          duration:
+            typeof item.duration === 'number'
+              ? Math.round(item.duration * 1000)
+              : 0,
+        }))
+        .filter((item) => item.text.length > 0)
+    }
+  } catch (error) {
+    console.log(
+      '[Edge] Proxy transcript endpoint error:',
+      error instanceof Error ? error.message : String(error)
+    )
+  }
+
+  return null
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { videoId } = await request.json()
@@ -131,6 +272,10 @@ export async function POST(request: NextRequest) {
     console.log('[Edge] Proxy URL configured:', proxyUrl ? 'Yes' : 'No')
     if (proxyUrl) {
       console.log('[Edge] Proxy URL value:', proxyUrl)
+      const proxyTranscript = await fetchTranscriptViaProxyLibrary(proxyUrl, videoId)
+      if (proxyTranscript && proxyTranscript.length > 0) {
+        return NextResponse.json({ transcript: proxyTranscript })
+      }
     }
 
     let html: string
@@ -201,7 +346,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Extract caption tracks from HTML
-    const captionTracks = extractCaptionTracksFromHTML(html)
+    let captionTracks = extractCaptionTracksFromHTML(html)
+
+    if ((!captionTracks || captionTracks.length === 0) && proxyUrl) {
+      console.log('[Edge] No caption tracks via HTML. Attempting player API fallback.')
+      const innertubeConfig = extractInnertubeConfig(html)
+      if (innertubeConfig) {
+        captionTracks = await fetchCaptionTracksFromPlayerApi(proxyUrl, videoId, innertubeConfig)
+      } else {
+        console.log('[Edge] Could not extract Innertube config for player API fallback')
+      }
+    }
 
     if (!captionTracks || captionTracks.length === 0) {
       console.log('[Edge] No caption tracks found')
