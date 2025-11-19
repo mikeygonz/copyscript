@@ -5,9 +5,22 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Enable CORS for your production domain
+// Allow server-to-server requests (no origin header) and browser requests from allowed origin
+const allowedOrigin = process.env.ALLOWED_ORIGIN || '*';
 app.use(cors({
-  origin: process.env.ALLOWED_ORIGIN || '*',
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like server-to-server requests from Edge Functions)
+    if (!origin) {
+      return callback(null, true);
+    }
+    // Allow requests from the configured origin
+    if (allowedOrigin === '*' || origin === allowedOrigin) {
+      return callback(null, true);
+    }
+    callback(new Error('Not allowed by CORS'));
+  },
   methods: ['GET', 'POST'],
+  credentials: false,
 }));
 
 app.use(express.json());

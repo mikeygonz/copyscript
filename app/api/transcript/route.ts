@@ -128,6 +128,10 @@ export async function POST(request: NextRequest) {
 
     // Check if proxy is configured
     const proxyUrl = process.env.YOUTUBE_PROXY_URL
+    console.log('[Edge] Proxy URL configured:', proxyUrl ? 'Yes' : 'No')
+    if (proxyUrl) {
+      console.log('[Edge] Proxy URL value:', proxyUrl)
+    }
 
     let html: string
 
