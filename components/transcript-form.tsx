@@ -162,7 +162,14 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
   }
 
   function normalizeUrl(url: string): string {
+    if (!url || typeof url !== 'string') {
+      return '';
+    }
     let normalizedUrl = url.trim();
+    // Return empty string if after trimming there's nothing
+    if (!normalizedUrl) {
+      return '';
+    }
     // Handle URLs without protocol (common on mobile)
     if (
       !normalizedUrl.startsWith("http://") &&
@@ -606,14 +613,27 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
   };
 
   const validateUrl = (url: string): string | null => {
-    if (!url || url.trim() === "") {
+    if (!url || typeof url !== 'string' || url.trim() === "") {
       return "Please enter a valid YouTube URL";
     }
     try {
       // Normalize URL - handle URLs without protocol (common on mobile)
       const normalizedUrl = normalizeUrl(url);
+      
+      // Check if normalization resulted in empty string
+      if (!normalizedUrl) {
+        return "Please enter a valid YouTube URL";
+      }
 
-      const urlObj = new URL(normalizedUrl);
+      // Validate URL can be constructed
+      let urlObj: URL;
+      try {
+        urlObj = new URL(normalizedUrl);
+      } catch (urlError) {
+        console.log("[v0] Invalid URL format:", normalizedUrl, urlError);
+        return "Please enter a valid YouTube URL";
+      }
+
       if (
         !urlObj.hostname.includes("youtube.com") &&
         !urlObj.hostname.includes("youtu.be")
@@ -706,10 +726,23 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                 onSubmit={(e) => {
                   e.preventDefault();
                   const formData = new FormData(e.currentTarget);
-                  let url = formData.get("url") as string;
+                  let url = formData.get("url");
+                  
+                  // Handle null or non-string values
+                  if (!url || typeof url !== 'string') {
+                    setValidationError("Please enter a valid YouTube URL");
+                    return;
+                  }
 
                   // Normalize URL before validation and submission
                   url = normalizeUrl(url);
+                  
+                  // Check if normalization resulted in empty string
+                  if (!url) {
+                    setValidationError("Please enter a valid YouTube URL");
+                    return;
+                  }
+                  
                   formData.set("url", url);
 
                   // Validate URL
@@ -807,10 +840,23 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
           onSubmit={(e) => {
             e.preventDefault();
             const formData = new FormData(e.currentTarget);
-            let url = formData.get("url") as string;
+            let url = formData.get("url");
+            
+            // Handle null or non-string values
+            if (!url || typeof url !== 'string') {
+              setValidationError("Please enter a valid YouTube URL");
+              return;
+            }
 
             // Normalize URL before validation and submission
             url = normalizeUrl(url);
+            
+            // Check if normalization resulted in empty string
+            if (!url) {
+              setValidationError("Please enter a valid YouTube URL");
+              return;
+            }
+            
             formData.set("url", url);
 
             // Validate URL
@@ -929,7 +975,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
       )}
 
       {recentSearches.length > 0 && !displayState?.transcript && !isPending && (
-        <div className="space-y-3 max-w-2xl mx-auto">
+        <div className="space-y-3 max-w-2xl mx-auto mt-8">
           <h2 className="text-xs font-medium text-muted-foreground/50 uppercase tracking-wider px-2">
             Recents
           </h2>
