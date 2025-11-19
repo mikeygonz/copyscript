@@ -200,10 +200,26 @@ async function getYoutubeTranscript(videoId: string): Promise<TranscriptItem[]> 
       })
       
       if (!response.ok) {
-        const responseText = await response.text()
-        console.log("[v0] Edge Function failed with status:", response.status)
-        console.log("[v0] Edge Function response:", responseText.substring(0, 500))
-        throw new Error(`Edge Function returned ${response.status}: ${responseText.substring(0, 200)}`)
+        let errorMessage = `Edge Function returned ${response.status}`
+        try {
+          const responseText = await response.text()
+          console.log("[v0] Edge Function failed with status:", response.status)
+          console.log("[v0] Edge Function response:", responseText.substring(0, 500))
+          
+          // Try to parse error message from JSON response
+          try {
+            const errorData = JSON.parse(responseText)
+            if (errorData.error) {
+              errorMessage = errorData.error
+            }
+          } catch {
+            // If not JSON, use the text directly
+            errorMessage = responseText.substring(0, 200) || errorMessage
+          }
+        } catch (e) {
+          console.log("[v0] Error reading response:", e)
+        }
+        throw new Error(errorMessage)
       }
       
       const responseText = await response.text()
@@ -421,7 +437,7 @@ async function fetchTranscriptCustom(videoId: string): Promise<TranscriptItem[]>
   
   // Strategy 3: Look for ytInitialData which might contain captions
   if (!captionTracks || captionTracks.length === 0) {
-    const ytInitialDataMatch = html.match(/var ytInitialData\s*=\s*({.+?});/s)
+    const ytInitialDataMatch = html.match(/var ytInitialData\s*=\s*({[\s\S]+?});/)
     if (ytInitialDataMatch) {
       try {
         const initialData = JSON.parse(ytInitialDataMatch[1])
@@ -729,10 +745,16 @@ export async function getTranscript(_prevState: TranscriptState, formData: FormD
     let userFriendlyError = errorMessage
     if (errorMessage.includes("timeout")) {
       userFriendlyError = "The request timed out. Please try again or check if the video has transcripts enabled."
+    } else if (errorMessage.includes("No transcripts available") || errorMessage.includes("No transcript URL found")) {
+      userFriendlyError = "This video doesn't have transcripts available. Not all YouTube videos have captions enabled."
     } else if (errorMessage.includes("disabled") || errorMessage.includes("not available") || errorMessage.includes("YouTube may be serving different content")) {
       userFriendlyError = "YouTube is blocking requests from this server. To fix this, either: (1) Run locally with 'npm run dev', or (2) Deploy the proxy server (see proxy-server/DEPLOY.md in the repo)."
-    } else if (errorMessage.includes("404") || errorMessage.includes("not found")) {
+    } else if (errorMessage.includes("404") && !errorMessage.includes("No transcripts")) {
       userFriendlyError = "Video not found. Please check the URL and try again."
+    } else if (errorMessage.includes("Failed to parse transcript")) {
+      userFriendlyError = "Unable to parse the transcript. The video may not have transcripts available."
+    } else if (errorMessage.includes("Proxy returned") || errorMessage.includes("Proxy failed")) {
+      userFriendlyError = "Proxy server error. Please try again in a moment."
     }
 
     return {
