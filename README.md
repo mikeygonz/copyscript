@@ -1,4 +1,4 @@
-# YouTube Transcript Tool
+# Copyscript
 
 A simple web application for fetching and copying YouTube video transcripts.
 

@@ -689,7 +689,7 @@ export async function getTranscript(_prevState: TranscriptState, formData: FormD
   console.log("[v0] getTranscript called with URL:", url)
 
   if (!url) {
-    return { error: "Please provide a YouTube URL" }
+    return { error: "Please enter a valid YouTube URL" }
   }
 
   // Extract video ID from URL
@@ -703,11 +703,11 @@ export async function getTranscript(_prevState: TranscriptState, formData: FormD
     }
 
     if (!videoId) {
-      return { error: "Invalid YouTube URL" }
+      return { error: "Please enter a valid YouTube URL" }
     }
     console.log("[v0] Extracted video ID:", videoId)
   } catch {
-    return { error: "Invalid URL format" }
+    return { error: "Please enter a valid YouTube URL" }
   }
 
   try {

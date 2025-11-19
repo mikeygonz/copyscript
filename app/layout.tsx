@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 
 import { Inter } from "next/font/google";
 import { JetBrains_Mono } from "next/font/google";
+import { Sarpanch } from "next/font/google";
 
 // Configure Server Actions timeout (max 60s on Pro, 10s on Hobby)
 export const maxDuration = 60;
@@ -24,9 +25,17 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
+const sarpanch = Sarpanch({
+  subsets: ["latin"],
+  weight: ["400"],
+  variable: "--font-sarpanch",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  title: "YouTube transcript.",
-  description: "Created with v0",
+  title: "Copyscript",
+  description:
+    "A simple web application for fetching and copying YouTube video transcripts",
   generator: "v0.app",
   viewport: {
     width: "device-width",
@@ -43,7 +52,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased`}
+        className={`${inter.variable} ${jetbrainsMono.variable} ${sarpanch.variable} font-sans antialiased`}
       >
         <ThemeProvider
           attribute="class"

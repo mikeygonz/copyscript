@@ -89,6 +89,7 @@
 @theme inline {
   --font-sans: var(--font-sans), 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: var(--font-mono), 'JetBrains Mono', monospace;
+  --font-sarpanch: var(--font-sarpanch), 'Sarpanch', sans-serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -153,6 +154,12 @@
 }
 
 @layer utilities {
+  .font-sarpanch {
+    font-family: var(--font-sarpanch);
+  }
+}
+
+@layer utilities {
   .shadow-layered {
     box-shadow: 
       0 2px 4px -1px rgba(0, 0, 0, 0.05),
@@ -197,38 +204,86 @@
   }
   
   .button-figma-style {
+    display: flex;
+    height: 40px;
+    padding: 16px 24px;
+    align-items: center;
+    gap: 8px;
     border-radius: 12px;
-    background: linear-gradient(109deg, rgba(255, 255, 255, 0.09) -10.38%, rgba(153, 153, 153, 0.09) 116.2%);
+    border: 0.5px solid rgba(255, 255, 255, 0.1);
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.3) 0%, rgba(0, 0, 0, 0.4) 100%);
+    backdrop-filter: blur(10px) saturate(180%);
+    -webkit-backdrop-filter: blur(10px) saturate(180%);
     box-shadow: 
-      0 0.5px 0 -1px rgba(255, 255, 255, 0.20) inset,
-      0 1px 1px 0 rgba(255, 255, 255, 0.05) inset,
-      0 4px 6px -3px rgba(0, 0, 0, 0.10),
-      0 1px 4px -2px rgba(0, 0, 0, 0.10),
-      0 1px 2px -1px rgba(0, 0, 0, 0.10),
-      0 1px 1px -1px rgba(0, 0, 0, 0.10),
-      0 1px 0 -1px rgba(0, 0, 0, 0.10);
-    transition: transform 0.05s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.05s cubic-bezier(0.4, 0, 0.2, 1);
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.15),
+      inset 0 -1px 0 0 rgba(0, 0, 0, 0.1),
+      inset 1px 0 0 0 rgba(255, 255, 255, 0.1),
+      inset -1px 0 0 0 rgba(255, 255, 255, 0.1),
+      0 1px 2px 0 rgba(0, 0, 0, 0.1);
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
   }
-  
+
+  .button-figma-style::before {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    height: 70%;
+    border-radius: 0 0 12px 12px;
+    background: radial-gradient(ellipse at center bottom, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.03) 40%, transparent 75%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .button-figma-style > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .button-figma-style:hover {
+    border-color: rgba(255, 255, 255, 0.12);
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.32) 0%, rgba(0, 0, 0, 0.42) 100%);
+    box-shadow: 
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.16),
+      inset 0 -1px 0 0 rgba(0, 0, 0, 0.11),
+      inset 1px 0 0 0 rgba(255, 255, 255, 0.11),
+      inset -1px 0 0 0 rgba(255, 255, 255, 0.11),
+      0 1px 2px 0 rgba(0, 0, 0, 0.11);
+  }
+
+  .button-figma-style:hover::before {
+    background: radial-gradient(ellipse at center bottom, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.04) 40%, transparent 75%);
+  }
+
+  .button-figma-style:focus-visible {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.15);
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.32) 0%, rgba(0, 0, 0, 0.42) 100%);
+    box-shadow: 
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.16),
+      inset 0 -1px 0 0 rgba(0, 0, 0, 0.11),
+      inset 1px 0 0 0 rgba(255, 255, 255, 0.11),
+      inset -1px 0 0 0 rgba(255, 255, 255, 0.11),
+      0 1px 2px 0 rgba(0, 0, 0, 0.11),
+      0 0 0 2px rgba(255, 255, 255, 0.08);
+  }
+
   .button-figma-style:active {
-    transform: scale(0.975) translateY(0.5px);
+    transform: translateY(0.5px);
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.5) 100%);
     box-shadow: 
-      0 1px 2px -1px rgba(0, 0, 0, 0.08),
-      0 0.5px 1px -1px rgba(0, 0, 0, 0.06),
-      inset 0 1px 2px 0 rgba(0, 0, 0, 0.15),
-      inset 0 0.5px 1px 0 rgba(0, 0, 0, 0.20),
-      inset 0 -0.5px 0 0 rgba(255, 255, 255, 0.08);
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.12),
+      inset 0 -1px 0 0 rgba(0, 0, 0, 0.08),
+      inset 1px 0 0 0 rgba(255, 255, 255, 0.08),
+      inset -1px 0 0 0 rgba(255, 255, 255, 0.08),
+      0 1px 1px 0 rgba(0, 0, 0, 0.08);
   }
-  
-  .button-figma-style:hover:not(:active) {
-    transform: translateY(-0.5px);
-    box-shadow: 
-      0 5px 8px -3px rgba(0, 0, 0, 0.12),
-      0 2px 4px -2px rgba(0, 0, 0, 0.10),
-      0 1px 2px -1px rgba(0, 0, 0, 0.10),
-      0 1px 1px -1px rgba(0, 0, 0, 0.10),
-      0 1px 0 -1px rgba(0, 0, 0, 0.10),
-      0 0.5px 0 -1px rgba(255, 255, 255, 0.22) inset,
-      0 1px 1px 0 rgba(255, 255, 255, 0.06) inset;
+
+  .button-figma-style:active::before {
+    background: radial-gradient(ellipse at center bottom, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.02) 40%, transparent 75%);
   }
 }

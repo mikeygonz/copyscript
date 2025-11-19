@@ -108,7 +108,7 @@ app.post('/fetch-transcript', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`[Proxy] Server running on port ${PORT}`);
   console.log(`[Proxy] Allowed origin: ${process.env.ALLOWED_ORIGIN || '*'}`);
 });

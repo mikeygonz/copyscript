@@ -49,8 +49,8 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
             type={type}
             data-slot="input"
             className={cn(
-              "relative file:text-foreground placeholder:text-white/25 selection:bg-primary selection:text-primary-foreground h-[40px] w-full min-w-0 rounded-[12px] border-0 p-3 text-base input-figma-style transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm select-text",
-              "aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
+              "relative file:text-foreground placeholder:text-white/25 selection:bg-primary selection:text-primary-foreground h-[40px] w-full min-w-0 rounded-[12px] border-0 p-[12px] text-base input-figma-style transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm select-text flex items-center gap-[8px]",
+              "aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/30 aria-invalid:border-destructive/50",
               inputClassName
             )}
             onKeyDown={handleKeyDown}

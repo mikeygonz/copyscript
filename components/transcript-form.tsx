@@ -164,8 +164,11 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
   function normalizeUrl(url: string): string {
     let normalizedUrl = url.trim();
     // Handle URLs without protocol (common on mobile)
-    if (!normalizedUrl.startsWith('http://') && !normalizedUrl.startsWith('https://')) {
-      normalizedUrl = 'https://' + normalizedUrl;
+    if (
+      !normalizedUrl.startsWith("http://") &&
+      !normalizedUrl.startsWith("https://")
+    ) {
+      normalizedUrl = "https://" + normalizedUrl;
     }
     return normalizedUrl;
   }
@@ -174,26 +177,26 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
     try {
       // Normalize URL - handle URLs without protocol
       const normalizedUrl = normalizeUrl(url);
-      
+
       const urlObj = new URL(normalizedUrl);
       if (urlObj.hostname.includes("youtube.com")) {
         let videoId = urlObj.searchParams.get("v");
-        
+
         // Also check for video ID in path for mobile URLs like /watch/v/VIDEO_ID
-        if (!videoId && urlObj.pathname.includes('/watch/')) {
-          const pathParts = urlObj.pathname.split('/');
-          const watchIndex = pathParts.indexOf('watch');
+        if (!videoId && urlObj.pathname.includes("/watch/")) {
+          const pathParts = urlObj.pathname.split("/");
+          const watchIndex = pathParts.indexOf("watch");
           if (watchIndex >= 0 && pathParts[watchIndex + 1]) {
             videoId = pathParts[watchIndex + 1];
           }
         }
-        
+
         return videoId ? videoId.trim() : null;
       } else if (urlObj.hostname.includes("youtu.be")) {
         // Handle youtu.be URLs - extract video ID from pathname, removing any query params
         const pathname = urlObj.pathname.slice(1); // Remove leading slash
         // Split by '/' or '?' to get just the video ID (in case there are extra path segments or query params)
-        const videoId = pathname.split('/')[0].split('?')[0];
+        const videoId = pathname.split("/")[0].split("?")[0];
         return videoId ? videoId.trim() : null;
       }
       return null;
@@ -604,12 +607,12 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
 
   const validateUrl = (url: string): string | null => {
     if (!url || url.trim() === "") {
-      return "Please enter a YouTube URL";
+      return "Please enter a valid YouTube URL";
     }
     try {
       // Normalize URL - handle URLs without protocol (common on mobile)
       const normalizedUrl = normalizeUrl(url);
-      
+
       const urlObj = new URL(normalizedUrl);
       if (
         !urlObj.hostname.includes("youtube.com") &&
@@ -635,42 +638,28 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
     >
       {/* Logo - Fixed top left in home view */}
       {!showHeader && (
-        <div className="fixed top-0 left-0 right-0 h-[60px] sm:h-[65px] z-50 flex items-center px-3 sm:px-4 pointer-events-none bg-background/80 backdrop-blur-sm sm:bg-transparent sm:backdrop-blur-none">
-          <svg
-            className="h-7 select-none cursor-pointer hover:opacity-80 transition-opacity pointer-events-auto"
-            viewBox="0 0 120 24"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
+        <div className="fixed top-[38px] left-[40px] z-50 pointer-events-none">
+          <div
+            className="select-none cursor-pointer hover:opacity-80 transition-opacity pointer-events-auto flex items-center gap-[8px]"
             onClick={handleLogoClick}
           >
-            {/* Copy icon */}
-            <path
-              d="M8 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              fill="none"
-              className="text-foreground/80"
-            />
-            <path
-              d="M4 6h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              fill="none"
-              className="text-foreground/80"
-              transform="translate(2, 2)"
-            />
-            {/* Text */}
-            <text
-              x="24"
-              y="16"
-              fontSize="14"
-              fontWeight="500"
-              fill="currentColor"
-              className="text-foreground"
-            >
-              copyscript
-            </text>
-          </svg>
+            <div className="relative shrink-0 size-[28px]">
+              <div className="absolute inset-[10.71%_14.29%]">
+                <div className="absolute inset-[-4.55%_-5%]">
+                  <img
+                    src="/logomark.svg"
+                    alt="Copyscript logomark"
+                    className="block max-w-none size-full"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-center shrink-0">
+              <span className="text-[20px] leading-normal text-white font-sarpanch whitespace-nowrap not-italic">
+                copyscript
+              </span>
+            </div>
+          </div>
         </div>
       )}
 
@@ -687,46 +676,33 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
         >
           <div className="w-full flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-4 py-3 sm:py-0 sm:h-[65px]">
             {/* Logo - Left */}
-            <svg
-              className="h-6 sm:h-7 select-none cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0"
-              viewBox="0 0 120 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
+            <div
+              className="select-none cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0 flex items-center gap-[8px]"
               onClick={handleLogoClick}
             >
-              {/* Copy icon */}
-              <path
-                d="M8 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                fill="none"
-                className="text-foreground/80"
-              />
-              <path
-                d="M4 6h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                fill="none"
-                className="text-foreground/80"
-                transform="translate(2, 2)"
-              />
-              {/* Text */}
-              <text
-                x="24"
-                y="16"
-                fontSize="14"
-                fontWeight="500"
-                fill="currentColor"
-                className="text-foreground"
-              >
-                copyscript
-              </text>
-            </svg>
+              <div className="relative shrink-0 size-6 sm:size-7">
+                <div className="absolute inset-[10.71%_14.29%]">
+                  <div className="absolute inset-[-4.55%_-5%]">
+                    <img
+                      src="/logomark.svg"
+                      alt="Copyscript logomark"
+                      className="block max-w-none size-full"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center justify-center shrink-0">
+                <span className="text-base sm:text-lg text-white font-sarpanch leading-normal whitespace-nowrap not-italic">
+                  copyscript
+                </span>
+              </div>
+            </div>
 
             {/* Search Form - Centered */}
             <div className="flex-1 flex justify-center min-w-0 w-full sm:w-auto">
               <form
                 action={formAction}
+                noValidate
                 onSubmit={(e) => {
                   e.preventDefault();
                   const formData = new FormData(e.currentTarget);
@@ -775,7 +751,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                 }}
                 className="w-full max-w-[800px]"
               >
-                <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-2 items-stretch sm:items-center">
+                <div className="flex flex-col sm:flex-row gap-[8px] items-stretch sm:items-center">
                   <Input
                     type="url"
                     name="url"
@@ -788,7 +764,9 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                     aria-invalid={!!(validationError || state?.error)}
                     aria-label="YouTube video URL"
                     aria-describedby={
-                      validationError || state?.error ? `${errorId}-header` : undefined
+                      validationError || state?.error
+                        ? `${errorId}-header`
+                        : undefined
                     }
                     autoComplete="url"
                     onChange={(e) => {
@@ -801,7 +779,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                   <Button
                     type="submit"
                     disabled={isPending}
-                    className="font-normal text-xs sm:text-sm whitespace-nowrap flex-shrink-0 w-full sm:w-auto"
+                    className="text-xs sm:text-sm w-full sm:w-auto"
                     aria-label={
                       isPending ? "Fetching transcript" : "Get transcript"
                     }
@@ -825,6 +803,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
       {!showHeader && (
         <form
           action={formAction}
+          noValidate
           onSubmit={(e) => {
             e.preventDefault();
             const formData = new FormData(e.currentTarget);
@@ -874,53 +853,54 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
           }}
         >
           <div className="space-y-1 max-w-2xl mx-auto">
-            <div className="flex flex-col sm:flex-row gap-2">
-              <div className="flex-1 min-w-0">
-                <Input
-                  ref={mainInputRef}
-                  type="url"
-                  name="url"
-                  placeholder="https://youtube.com/watch?v=..."
-                  disabled={isPending}
-                  className={cn("text-base sm:text-base", hasError && "aria-invalid")}
-                  aria-invalid={hasError}
-                  aria-describedby={hasError ? errorId : undefined}
-                  aria-errormessage={hasError ? errorId : undefined}
-                  aria-label="YouTube video URL"
-                  autoComplete="url"
-                  onFocus={() => {
-                    setIsInputFocused(true);
-                    setFocusedRecentIndex(null);
-                  }}
-                  onBlur={() => setIsInputFocused(false)}
-                  onKeyDown={(e) => {
-                    // Arrow down to move to first recent item
-                    if (
-                      e.key === "ArrowDown" &&
-                      recentSearches.length > 0 &&
-                      !showHeader
-                    ) {
-                      e.preventDefault();
-                      if (recentSearchRefs.current[0]) {
-                        recentSearchRefs.current[0]?.focus();
-                        setFocusedRecentIndex(0);
-                      }
+            <div className="flex flex-col sm:flex-row gap-[8px] items-center justify-center">
+              <Input
+                ref={mainInputRef}
+                type="url"
+                name="url"
+                placeholder="https://youtube.com/watch?v=..."
+                disabled={isPending}
+                className={cn(
+                  "text-base sm:text-base w-full sm:w-[434px]",
+                  hasError && "aria-invalid"
+                )}
+                aria-invalid={hasError}
+                aria-describedby={hasError ? errorId : undefined}
+                aria-errormessage={hasError ? errorId : undefined}
+                aria-label="YouTube video URL"
+                autoComplete="url"
+                onFocus={() => {
+                  setIsInputFocused(true);
+                  setFocusedRecentIndex(null);
+                }}
+                onBlur={() => setIsInputFocused(false)}
+                onKeyDown={(e) => {
+                  // Arrow down to move to first recent item
+                  if (
+                    e.key === "ArrowDown" &&
+                    recentSearches.length > 0 &&
+                    !showHeader
+                  ) {
+                    e.preventDefault();
+                    if (recentSearchRefs.current[0]) {
+                      recentSearchRefs.current[0]?.focus();
+                      setFocusedRecentIndex(0);
                     }
-                  }}
-                  onChange={(e) => {
-                    setCurrentUrl(e.target.value);
-                    // Clear validation error when user starts typing
-                    if (validationError) {
-                      setValidationError(null);
-                    }
-                    // Note: Server errors (state.error) will persist until next submission
-                  }}
-                />
-              </div>
+                  }
+                }}
+                onChange={(e) => {
+                  setCurrentUrl(e.target.value);
+                  // Clear validation error when user starts typing
+                  if (validationError) {
+                    setValidationError(null);
+                  }
+                  // Note: Server errors (state.error) will persist until next submission
+                }}
+              />
               <Button
                 type="submit"
                 disabled={isPending}
-                className="font-normal text-sm whitespace-nowrap flex-shrink-0 w-full sm:w-auto"
+                className="w-full sm:w-[160px]"
                 aria-label={
                   isPending ? "Fetching transcript" : "Get transcript"
                 }
@@ -929,14 +909,20 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
               </Button>
             </div>
             {hasError && (
-              <p
-                id={errorId}
-                role="alert"
-                aria-live="polite"
-                className="text-sm text-destructive px-1"
-              >
-                {errorMessage}
-              </p>
+              <div className="flex flex-col sm:flex-row gap-[8px] justify-center items-center">
+                <div className="w-full sm:w-[434px]">
+                  <p
+                    id={errorId}
+                    role="alert"
+                    aria-live="polite"
+                    className="text-sm text-destructive/80 pl-[12px] text-left"
+                  >
+                    {errorMessage}
+                  </p>
+                </div>
+                <div className="hidden sm:block w-auto sm:w-[160px]" />{" "}
+                {/* Spacer to balance the button width */}
+              </div>
             )}
           </div>
         </form>
