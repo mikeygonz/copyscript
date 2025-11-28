@@ -21,9 +21,18 @@ pnpm install
 pnpm dev
 ```
 
-## Credits
+## How It Works
 
-YouTube transcript functionality powered by [@danielxceron/youtube-transcript](https://github.com/danielxceron/youtube-transcript).
+This app uses the [`youtube-transcript`](https://www.npmjs.com/package/youtube-transcript) library to fetch transcripts directly from YouTube videos. The library extracts caption data from YouTube's public APIs.
+
+**Note:** Not all YouTube videos have transcripts available. Videos must have captions enabled by the creator.
+
+## Tech Stack
+
+- [Next.js](https://nextjs.org/) - React framework
+- [Tailwind CSS](https://tailwindcss.com/) - Styling
+- [Radix UI](https://www.radix-ui.com/) - Accessible components
+- [youtube-transcript](https://www.npmjs.com/package/youtube-transcript) - Transcript fetching
 
 ## License
 

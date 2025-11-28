@@ -207,8 +207,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
         return videoId ? videoId.trim() : null;
       }
       return null;
-    } catch (error) {
-      console.log("[v0] Client-side extractVideoId error:", error);
+    } catch {
       return null;
     }
   }
@@ -306,23 +305,8 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
     ) {
       const videoId = extractVideoId(lastSubmittedUrl);
       if (!videoId) {
-        console.error(
-          "[v0] Could not extract video ID from URL:",
-          lastSubmittedUrl
-        );
         return;
       }
-
-      console.log(
-        "[v0] Saving transcript to history - Video ID:",
-        videoId,
-        "Title:",
-        state.metadata.title,
-        "URL:",
-        lastSubmittedUrl,
-        "Current loadingVideoId:",
-        loadingVideoId
-      );
 
       // Clear cached state when new transcript is fetched
       setCachedState(null);
@@ -351,14 +335,10 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
         // Add the new entry at the beginning
         const updated = [searchEntry, ...withoutDuplicates].slice(0, 10);
         localStorage.setItem("recentSearches", JSON.stringify(updated));
-        console.log("[v0] Added new item to history:", searchEntry);
 
         // Clear loading state after this update completes
-        // Check if the new item is now in the list
         if (updated.some((s) => s.videoId === videoId)) {
-          // Use setTimeout to ensure this happens after React has processed the state update
           setTimeout(() => {
-            console.log("[v0] Clearing loadingVideoId after history update");
             setLoadingVideoId(null);
           }, 0);
         }
@@ -398,27 +378,13 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
     const videoId = extractVideoId(url);
     if (!videoId) return;
 
-    console.log("[v0] Clicking history item - Video ID:", videoId, "URL:", url);
-
     // Check if we have cached transcript data FIRST, before clearing anything
     if (typeof window !== "undefined") {
       const cached = localStorage.getItem(`transcriptCache_${videoId}`);
-      console.log(
-        "[v0] Cache lookup for videoId:",
-        videoId,
-        "Found:",
-        !!cached
-      );
 
       if (cached) {
         try {
           const cachedData = JSON.parse(cached);
-          console.log(
-            "[v0] Loading cached transcript for:",
-            videoId,
-            "Title:",
-            cachedData.metadata?.title
-          );
 
           const input = document.querySelector(
             'input[name="url"]'
@@ -437,12 +403,9 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
           setLastSubmittedUrl(""); // Clear submitted URL to prevent interference
           // Don't set loadingVideoId for cached items - instant load
           return;
-        } catch (e) {
+        } catch {
           // If cache parsing fails, fall through to normal fetch
-          console.error("[v0] Error parsing cached transcript:", e);
         }
-      } else {
-        console.log("[v0] No cached transcript found for:", videoId);
       }
     }
 
@@ -629,8 +592,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
       let urlObj: URL;
       try {
         urlObj = new URL(normalizedUrl);
-      } catch (urlError) {
-        console.log("[v0] Invalid URL format:", normalizedUrl, urlError);
+      } catch {
         return "Please enter a valid YouTube URL";
       }
 
@@ -645,8 +607,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
         return "Please enter a valid YouTube URL";
       }
       return null;
-    } catch (error) {
-      console.log("[v0] Client-side URL validation error:", error);
+    } catch {
       return "Please enter a valid YouTube URL";
     }
   };
@@ -776,7 +737,6 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                       return filtered;
                     });
                   }
-                  console.log("[v0] Form submitted with URL:", url);
 
                   startTransition(() => {
                     formAction(formData);
@@ -890,7 +850,6 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                 return filtered;
               });
             }
-            console.log("[v0] Form submitted with URL:", url);
 
             // Submit the form within a transition
             startTransition(() => {
@@ -1414,17 +1373,11 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                     ) : null}
                     {recentSearches
                       .filter((search) => {
-                        // Always filter out the loading video ID to prevent duplicates
-                        // This ensures old metadata doesn't show while loading
+                        // Filter out the loading video ID to prevent duplicates
                         if (
                           loadingVideoId &&
                           search.videoId === loadingVideoId
                         ) {
-                          console.log(
-                            "[v0] Filtering out loading video from history display:",
-                            search.videoId,
-                            "to prevent showing old metadata"
-                          );
                           return false;
                         }
                         return true;
