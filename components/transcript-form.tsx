@@ -81,12 +81,8 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
     setLastSubmittedUrl("");
     setCurrentUrl("");
     setValidationError(null);
-    // Clear the input field
-    const input = document.querySelector(
-      'input[name="url"]'
-    ) as HTMLInputElement;
-    if (input) {
-      input.value = "";
+    if (mainInputRef.current) {
+      mainInputRef.current.value = "";
     }
   };
 
@@ -386,11 +382,8 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
         try {
           const cachedData = JSON.parse(cached);
 
-          const input = document.querySelector(
-            'input[name="url"]'
-          ) as HTMLInputElement;
-          if (input) {
-            input.value = url;
+          if (mainInputRef.current) {
+            mainInputRef.current.value = url;
             setCurrentUrl(url);
           }
 
@@ -413,14 +406,10 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
     setLoadingVideoId(videoId); // Track which video is loading
     setCachedState(null); // Only clear if we're actually fetching
     setLastSubmittedUrl(url); // Set this so the useEffect knows which URL we're fetching
-    const input = document.querySelector(
-      'input[name="url"]'
-    ) as HTMLInputElement;
-    if (input) {
-      input.value = url;
+    if (mainInputRef.current) {
+      mainInputRef.current.value = url;
       setCurrentUrl(url);
-      // Submit the form
-      const form = input.closest("form");
+      const form = mainInputRef.current.closest("form");
       if (form) {
         form.requestSubmit();
       }
@@ -543,12 +532,8 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
         setCachedState(null);
         setLastSubmittedUrl("");
         setCurrentUrl("");
-        // Clear the input field
-        const input = document.querySelector(
-          'input[name="url"]'
-        ) as HTMLInputElement;
-        if (input) {
-          input.value = "";
+        if (mainInputRef.current) {
+          mainInputRef.current.value = "";
         }
       }
 
@@ -565,13 +550,30 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
   };
 
   const handleNewSearch = () => {
-    const input = document.querySelector(
-      'input[name="url"]'
-    ) as HTMLInputElement;
-    if (input) {
-      input.value = "";
-      input.focus();
+    if (mainInputRef.current) {
+      mainInputRef.current.value = "";
+      mainInputRef.current.focus();
       setCurrentUrl("");
+    }
+  };
+
+  const handleClearAll = () => {
+    setRecentSearches([]);
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("recentSearches");
+      const keys = Object.keys(localStorage);
+      keys.forEach((key) => {
+        if (key.startsWith("transcriptCache_")) {
+          localStorage.removeItem(key);
+        }
+      });
+    }
+    setSelectedVideoId(null);
+    setCachedState(null);
+    setLastSubmittedUrl("");
+    setCurrentUrl("");
+    if (mainInputRef.current) {
+      mainInputRef.current.value = "";
     }
   };
 
@@ -935,9 +937,18 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
 
       {recentSearches.length > 0 && !displayState?.transcript && !isPending && (
         <div className="space-y-3 max-w-2xl mx-auto mt-8">
-          <h2 className="text-xs font-medium text-muted-foreground/50 uppercase tracking-wider px-2">
-            Recents
-          </h2>
+          <div className="flex items-center justify-between px-2">
+            <h2 className="text-xs font-medium text-muted-foreground/50 uppercase tracking-wider">
+              Recents
+            </h2>
+            <button
+              onClick={handleClearAll}
+              className="text-xs text-muted-foreground/70 hover:text-foreground/80 transition-colors underline-offset-4 hover:underline"
+              aria-label="Clear all recent searches"
+            >
+              Clear All
+            </button>
+          </div>
           <div className="space-y-1.5" role="list" aria-label="Recent searches">
             {recentSearches.map((search, index) => {
               const isSelected = selectedVideoId === search.videoId;
@@ -1159,7 +1170,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                     )}
                     {displayState.metadata.duration && (
                       <>
-                        <span>?</span>
+                        <span>•</span>
                         <div className="flex items-center gap-1">
                           <Clock className="h-3.5 w-3.5" />
                           <span>{displayState.metadata.duration}</span>
@@ -1168,7 +1179,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
                     )}
                     {lastSubmittedUrl && (
                       <>
-                        <span>?</span>
+                        <span>•</span>
                         <a
                           href={lastSubmittedUrl}
                           target="_blank"
