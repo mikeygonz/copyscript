@@ -6,11 +6,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gonz/copyscript.git"
+    "url": "git+https://github.com/mikeygonz/copyscript.git"
   },
-  "homepage": "https://github.com/gonz/copyscript#readme",
+  "homepage": "https://github.com/mikeygonz/copyscript#readme",
   "bugs": {
-    "url": "https://github.com/gonz/copyscript/issues"
+    "url": "https://github.com/mikeygonz/copyscript/issues"
   },
   "keywords": [
     "youtube",

@@ -20,7 +20,7 @@ A fast, minimal tool for fetching YouTube video transcripts. Paste a link, get a
 ### Installation
 
 ```bash
-git clone https://github.com/gonz/copyscript.git
+git clone https://github.com/mikeygonz/copyscript.git
 cd copyscript
 pnpm install
 pnpm dev
