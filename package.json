@@ -1,7 +1,26 @@
 {
   "name": "copyscript",
-  "version": "0.1.0",
-  "private": true,
+  "version": "1.0.0",
+  "description": "Fetch and copy YouTube video transcripts instantly. Paste a link, get an AI-ready transcript.",
+  "author": "Mike Gonzalez (https://gonz.co)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gonz/copyscript.git"
+  },
+  "homepage": "https://github.com/gonz/copyscript#readme",
+  "bugs": {
+    "url": "https://github.com/gonz/copyscript/issues"
+  },
+  "keywords": [
+    "youtube",
+    "transcript",
+    "captions",
+    "subtitles",
+    "ai",
+    "nextjs",
+    "react"
+  ],
   "scripts": {
     "build": "next build",
     "dev": "next dev",

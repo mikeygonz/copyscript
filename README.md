@@ -1,39 +1,50 @@
 # Copyscript
 
-A simple web application for fetching and copying YouTube video transcripts.
+A fast, minimal tool for fetching YouTube video transcripts. Paste a link, get an AI-ready transcript instantly.
 
 ## Features
 
-- Fetch transcripts from YouTube videos
-- Copy transcripts with or without timestamps
-- View recent searches
-- Keyboard accessible
+- **Instant transcripts** — Fetch captions from any YouTube video with transcripts enabled
+- **AI-ready output** — Copy transcripts with or without timestamps, formatted for LLMs
+- **Recent searches** — Quickly access previously fetched transcripts (stored locally)
+- **Keyboard accessible** — Full keyboard navigation support
+- **Mobile friendly** — Responsive design that works on any device
 
-## Installation
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18+
+- pnpm (recommended) or npm
+
+### Installation
 
 ```bash
+git clone https://github.com/gonz/copyscript.git
+cd copyscript
 pnpm install
-```
-
-## Development
-
-```bash
 pnpm dev
 ```
 
+Open [http://localhost:3000](http://localhost:3000) to see the app.
+
 ## How It Works
 
-This app uses the [`youtube-transcript`](https://www.npmjs.com/package/youtube-transcript) library to fetch transcripts directly from YouTube videos. The library extracts caption data from YouTube's public APIs.
+Uses the [`youtube-transcript`](https://www.npmjs.com/package/youtube-transcript) library to fetch transcripts directly from YouTube's caption data. No API keys required.
 
-**Note:** Not all YouTube videos have transcripts available. Videos must have captions enabled by the creator.
+Note: This works locally but not when deployed — YouTube blocks requests from cloud server IPs.
 
 ## Tech Stack
 
-- [Next.js](https://nextjs.org/) - React framework
-- [Tailwind CSS](https://tailwindcss.com/) - Styling
-- [Radix UI](https://www.radix-ui.com/) - Accessible components
-- [youtube-transcript](https://www.npmjs.com/package/youtube-transcript) - Transcript fetching
+- [Next.js 16](https://nextjs.org/)
+- [React 19](https://react.dev/)
+- [Tailwind CSS 4](https://tailwindcss.com/)
+- [Radix UI](https://www.radix-ui.com/)
 
 ## License
 
 MIT
+
+## Author
+
+[Mike Gonzalez](https://gonz.co)

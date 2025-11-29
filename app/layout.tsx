@@ -34,14 +34,13 @@ const sarpanch = Sarpanch({
 
 export const metadata: Metadata = {
   title: "Copyscript",
-  description:
-    "A simple web application for fetching and copying YouTube video transcripts",
-  generator: "v0.app",
-  viewport: {
-    width: "device-width",
-    initialScale: 1,
-    maximumScale: 5,
-  },
+  description: "Fetch and copy YouTube video transcripts instantly. Paste a link, get an AI-ready transcript.",
+};
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
 };
 
 export default function RootLayout({
