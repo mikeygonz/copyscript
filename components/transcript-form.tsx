@@ -393,7 +393,7 @@ export const TranscriptForm = ({ titleElement }: TranscriptFormProps) => {
             metadata: cachedData.metadata,
           });
           setSelectedVideoId(videoId);
-          setLastSubmittedUrl(""); // Clear submitted URL to prevent interference
+          setLastSubmittedUrl(url); // Keep URL so timestamps are clickable
           // Don't set loadingVideoId for cached items - instant load
           return;
         } catch {
