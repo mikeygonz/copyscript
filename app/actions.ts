@@ -33,7 +33,8 @@ function formatDuration(seconds: number): string {
   return `${minutes}:${secs.toString().padStart(2, '0')}`
 }
 
-async function getYoutubeVideoMetadata(videoId: string, transcriptItems?: TranscriptItem[]): Promise<VideoMetadata | null> {
+// Fetch basic metadata without duration (for parallel fetching)
+async function getYoutubeVideoMetadataBase(videoId: string): Promise<Omit<VideoMetadata, 'duration'> | null> {
   try {
     const response = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`)
     if (!response.ok) {
@@ -41,55 +42,59 @@ async function getYoutubeVideoMetadata(videoId: string, transcriptItems?: Transc
     }
     const data = await response.json()
 
-    // Calculate duration from transcript if available
-    let duration = ''
-    if (transcriptItems && transcriptItems.length > 0) {
-      let maxEndTime = 0
-
-      // Check a sample to determine if values are in seconds or milliseconds
-      const sampleOffset = transcriptItems[0]?.offset || 0
-      const sampleDuration = transcriptItems[0]?.duration || 0
-      const likelyMilliseconds = sampleOffset > 1000 || sampleDuration > 1000
-
-      for (const item of transcriptItems) {
-        const offsetValue = typeof item.offset === 'number' && !isNaN(item.offset) ? item.offset : 0
-        const durationValue = typeof item.duration === 'number' && !isNaN(item.duration) ? item.duration : 0
-
-        const offsetSeconds = likelyMilliseconds ? offsetValue / 1000 : offsetValue
-        const durationSeconds = likelyMilliseconds ? durationValue / 1000 : durationValue
-
-        const endTime = offsetSeconds + durationSeconds
-
-        if (endTime > maxEndTime) {
-          maxEndTime = endTime
-        }
-      }
-
-      // Also check the last item specifically
-      const lastItem = transcriptItems[transcriptItems.length - 1]
-      const lastOffset = typeof lastItem.offset === 'number' && !isNaN(lastItem.offset) ? lastItem.offset : 0
-      const lastDuration = typeof lastItem.duration === 'number' && !isNaN(lastItem.duration) ? lastItem.duration : 0
-      const lastOffsetSeconds = likelyMilliseconds ? lastOffset / 1000 : lastOffset
-      const lastDurationSeconds = likelyMilliseconds ? lastDuration / 1000 : lastDuration
-      const lastEndTime = lastOffsetSeconds + lastDurationSeconds
-
-      const finalDuration = Math.max(maxEndTime, lastEndTime)
-
-      if (finalDuration > 0) {
-        duration = formatDuration(finalDuration)
-      }
-    }
-
     return {
       title: data.title || '',
       thumbnail: data.thumbnail_url || `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
-      duration,
       channelName: data.author_name || undefined,
       channelUrl: data.author_url || undefined,
     }
   } catch {
     return null
   }
+}
+
+// Calculate duration from transcript items
+function calculateDurationFromTranscript(transcriptItems: TranscriptItem[]): string {
+  if (!transcriptItems || transcriptItems.length === 0) {
+    return ''
+  }
+
+  let maxEndTime = 0
+
+  // Check a sample to determine if values are in seconds or milliseconds
+  const sampleOffset = transcriptItems[0]?.offset || 0
+  const sampleDuration = transcriptItems[0]?.duration || 0
+  const likelyMilliseconds = sampleOffset > 1000 || sampleDuration > 1000
+
+  for (const item of transcriptItems) {
+    const offsetValue = typeof item.offset === 'number' && !isNaN(item.offset) ? item.offset : 0
+    const durationValue = typeof item.duration === 'number' && !isNaN(item.duration) ? item.duration : 0
+
+    const offsetSeconds = likelyMilliseconds ? offsetValue / 1000 : offsetValue
+    const durationSeconds = likelyMilliseconds ? durationValue / 1000 : durationValue
+
+    const endTime = offsetSeconds + durationSeconds
+
+    if (endTime > maxEndTime) {
+      maxEndTime = endTime
+    }
+  }
+
+  // Also check the last item specifically
+  const lastItem = transcriptItems[transcriptItems.length - 1]
+  const lastOffset = typeof lastItem.offset === 'number' && !isNaN(lastItem.offset) ? lastItem.offset : 0
+  const lastDuration = typeof lastItem.duration === 'number' && !isNaN(lastItem.duration) ? lastItem.duration : 0
+  const lastOffsetSeconds = likelyMilliseconds ? lastOffset / 1000 : lastOffset
+  const lastDurationSeconds = likelyMilliseconds ? lastDuration / 1000 : lastDuration
+  const lastEndTime = lastOffsetSeconds + lastDurationSeconds
+
+  const finalDuration = Math.max(maxEndTime, lastEndTime)
+
+  if (finalDuration > 0) {
+    return formatDuration(finalDuration)
+  }
+
+  return ''
 }
 
 async function getYoutubeTranscript(videoId: string): Promise<TranscriptItem[]> {
@@ -177,9 +182,17 @@ export async function getTranscript(_prevState: TranscriptState, formData: FormD
   }
 
   try {
-    const transcript = await getYoutubeTranscript(videoId)
-    const metadata = await getYoutubeVideoMetadata(videoId, transcript)
-    return { transcript, metadata: metadata || undefined }
+    // Fetch transcript and metadata in parallel for faster loading
+    const [transcript, metadataBase] = await Promise.all([
+      getYoutubeTranscript(videoId),
+      getYoutubeVideoMetadataBase(videoId)
+    ])
+
+    // Calculate duration from transcript (no network call)
+    const duration = calculateDurationFromTranscript(transcript)
+    const metadata = metadataBase ? { ...metadataBase, duration } : undefined
+
+    return { transcript, metadata }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error"
 
